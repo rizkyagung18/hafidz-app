@@ -1,0 +1,40 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.uv-cache/
+.tools/
+
+# Generated model and Quran data
+models/
+services/api/data/*.pkl
+services/api/data/*.sha256
+services/api/eval/output/
+services/api/eval/golden-v1/audio/
+apps/mobile/assets/db/*.sqlite
+apps/mobile/assets/db/*.sha256
+tools/build_quran_db/.cache/
+
+# Flutter
+apps/mobile/android/local.properties
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+build/
+coverage/
+
+# Editors and macOS
+.DS_Store
+*.iml
+.idea/
+.vscode/

@@ -1,0 +1,34 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    environment:
+      APP_ENV: dev
+      REDIS_URL: redis://redis:6379/0
+      QURAN_INDEX_PATH: /data/quran_index.pkl
+      QURAN_DB_PATH: /data/quran.sqlite
+    volumes:
+      - ../services/api/data:/data:ro
+      - ../apps/mobile/assets/db/quran.sqlite:/data/quran.sqlite:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

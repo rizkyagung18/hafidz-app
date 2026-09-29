@@ -1,0 +1,388 @@
+openapi: 3.1.0
+info:
+  title: Hafidz App BFF API
+  version: 1.0.0
+  description: Backend-for-Frontend + AI Voice Ayah Finder for Hafidz App. See docs/05-BACKEND-API-SPEC.md.
+servers:
+  - url: http://localhost:8000
+    description: dev
+  - url: https://api.example.com
+    description: prod
+components:
+  parameters:
+    DeviceId:
+      name: X-Device-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    AyahKey:
+      name: key
+      in: path
+      required: true
+      schema: { type: string, pattern: '^([1-9]|[1-9][0-9]|10[0-9]|11[0-4]):[0-9]{1,3}$' }
+      example: '2:255'
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code:
+          type: string
+          enum: [AUDIO_TOO_SHORT, AUDIO_TOO_LONG, AUDIO_UNSUPPORTED, AUDIO_SILENT, NOT_FOUND, UPSTREAM_UNAVAILABLE, RATE_LIMITED, VALIDATION_ERROR]
+        request_id: { type: string }
+    MatchSpan:
+      type: object
+      required: [ayah, word_start, word_end]
+      properties:
+        ayah: { type: integer }
+        word_start: { type: integer }
+        word_end: { type: integer }
+    AyahMatch:
+      type: object
+      required: [key, surah, ayah_start, ayah_end, page, juz, score]
+      properties:
+        key: { type: string, example: '2:255' }
+        surah: { type: integer, minimum: 1, maximum: 114 }
+        ayah_start: { type: integer, minimum: 1 }
+        ayah_end: { type: integer, minimum: 1 }
+        page: { type: integer, minimum: 1, maximum: 604 }
+        juz: { type: integer, minimum: 1, maximum: 30 }
+        surah_name_arabic: { type: string }
+        surah_name_latin: { type: string }
+        surah_name_translation: { type: string }
+        score: { type: number, minimum: 0, maximum: 1 }
+        match_span:
+          oneOf:
+            - $ref: '#/components/schemas/MatchSpan'
+            - type: 'null'
+    VoiceDetectResponse:
+      type: object
+      required: [request_id, transcript, confidence, margin, ambiguous, reason, best, candidates, thresholds, timing_ms]
+      properties:
+        request_id: { type: string }
+        transcript: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        margin: { type: number }
+        ambiguous: { type: boolean }
+        reason:
+          type: [string, 'null']
+          enum: [too_short, basmala_only, identical_ayat, low_confidence, null]
+        best:
+          oneOf:
+            - $ref: '#/components/schemas/AyahMatch'
+            - type: 'null'
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/AyahMatch' }
+          maxItems: 5
+        thresholds:
+          type: object
+          properties:
+            auto: { type: number, example: 0.8 }
+            min: { type: number, example: 0.55 }
+            margin: { type: number, example: 0.1 }
+        timing_ms:
+          type: object
+          properties:
+            decode: { type: integer }
+            asr: { type: integer }
+            match: { type: integer }
+            total: { type: integer }
+    Surah:
+      type: object
+      properties:
+        number: { type: integer }
+        name_arabic: { type: string }
+        name_latin: { type: string }
+        translation: { type: string }
+        ayah_count: { type: integer }
+        revelation_place: { type: string, enum: [makkah, madinah] }
+        first_page: { type: integer }
+    Ayah:
+      type: object
+      properties:
+        key: { type: string }
+        surah: { type: integer }
+        ayah: { type: integer }
+        global_index: { type: integer, minimum: 1, maximum: 6236 }
+        page: { type: integer }
+        juz: { type: integer }
+        hizb_quarter: { type: integer }
+        sajda: { type: boolean }
+        text_uthmani: { type: string }
+        text_latin: { type: string }
+        translation_id: { type: string }
+        audio:
+          type: object
+          additionalProperties: { type: string, format: uri }
+    Reciter:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        style: { type: string, enum: [murattal, mujawwad, muallim] }
+        ayah_url_template: { type: string }
+        surah_url_template: { type: string }
+        fallback_ayah_url_template: { type: string }
+    PrayerDay:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        hijri: { type: string }
+        times:
+          type: object
+          properties:
+            imsak: { type: string, example: '04:15' }
+            subuh: { type: string }
+            terbit: { type: string }
+            dhuha: { type: string }
+            dzuhur: { type: string }
+            ashar: { type: string }
+            maghrib: { type: string }
+            isya: { type: string }
+    PrayerSchedule:
+      type: object
+      properties:
+        location:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            province: { type: string }
+            tz: { type: string }
+            lat: { type: number }
+            lng: { type: number }
+        source: { type: string, enum: ['kemenag:equran', 'kemenag:myquran', aladhan, calc] }
+        method:
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            school: { type: integer }
+            ihtiyat_min: { type: integer }
+        days:
+          type: array
+          items: { $ref: '#/components/schemas/PrayerDay' }
+    Doa:
+      type: object
+      properties:
+        id: { type: integer }
+        grup: { type: string }
+        nama: { type: string }
+        ar: { type: string }
+        tr: { type: string }
+        idn: { type: string }
+        tentang: { type: string }
+        tag: { type: array, items: { type: string } }
+    Hadith:
+      type: object
+      properties:
+        book: { type: string }
+        number: { type: integer }
+        arab: { type: string }
+        id: { type: string, description: Indonesian translation }
+        source: { type: string }
+paths:
+  /v1/voice/detect:
+    post:
+      tags: [voice]
+      summary: Detect Qur'an ayah(s) from a short recitation audio clip
+      parameters: [ { $ref: '#/components/parameters/DeviceId' } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary }
+                hint_surah: { type: integer, minimum: 1, maximum: 114 }
+                locale: { type: string, enum: [id, en], default: id }
+                max_candidates: { type: integer, minimum: 1, maximum: 5, default: 5 }
+      responses:
+        '200':
+          description: Detection result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VoiceDetectResponse' }
+        '400': { description: Invalid form values, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '413': { description: Too large/long, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '415': { description: Unsupported audio, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '422': { description: Too short / silent, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '429': { description: Rate limited, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+        '503': { description: Rate limiter or detection data unavailable, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /v1/quran/surahs:
+    get:
+      tags: [quran]
+      responses:
+        '200':
+          description: Surah list
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Surah' } } } }
+  /v1/quran/surahs/{n}:
+    get:
+      tags: [quran]
+      parameters:
+        - { name: n, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 114 } }
+        - { name: include, in: query, schema: { type: string, example: 'translation,latin,audio' } }
+        - { name: qari, in: query, schema: { type: string, example: '05' } }
+      responses:
+        '200':
+          description: Surah with ayat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  surah: { $ref: '#/components/schemas/Surah' }
+                  ayat: { type: array, items: { $ref: '#/components/schemas/Ayah' } }
+  /v1/quran/ayah/{key}:
+    get:
+      tags: [quran]
+      parameters: [ { $ref: '#/components/parameters/AyahKey' } ]
+      responses:
+        '200': { description: Ayah, content: { application/json: { schema: { $ref: '#/components/schemas/Ayah' } } } }
+        '404': { description: Not found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /v1/quran/page/{page}:
+    get:
+      tags: [quran]
+      parameters:
+        - { name: page, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 604 } }
+      responses:
+        '200': { description: Ayat on page, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Ayah' } } } } }
+  /v1/quran/tafsir/{surah}:
+    get:
+      tags: [quran]
+      parameters:
+        - { name: surah, in: path, required: true, schema: { type: integer, minimum: 1, maximum: 114 } }
+      responses:
+        '200': { description: Tafsir Kemenag per ayah }
+  /v1/quran/reciters:
+    get:
+      tags: [quran]
+      responses:
+        '200': { description: Reciters, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Reciter' } } } } }
+  /v1/quran/search:
+    get:
+      tags: [quran]
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2 } }
+        - { name: lang, in: query, schema: { type: string, enum: [ar, id, en], default: id } }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 50 } }
+      responses:
+        '200': { description: Search hits }
+  /v1/quran/db/manifest:
+    get:
+      tags: [quran]
+      responses:
+        '200':
+          description: Offline DB manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string }
+                  sha256: { type: string }
+                  url: { type: string, format: uri }
+                  size: { type: integer }
+  /v1/prayer/locations/provinces:
+    get: { tags: [prayer], responses: { '200': { description: Provinces } } }
+  /v1/prayer/locations/cities:
+    get:
+      tags: [prayer]
+      parameters: [ { name: province, in: query, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Cities } }
+  /v1/prayer/locations/search:
+    get:
+      tags: [prayer]
+      parameters: [ { name: q, in: query, required: true, schema: { type: string } } ]
+      responses: { '200': { description: Matching locations } }
+  /v1/prayer/locations/reverse:
+    get:
+      tags: [prayer]
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number } }
+        - { name: lng, in: query, required: true, schema: { type: number } }
+      responses: { '200': { description: Nearest location } }
+  /v1/prayer/times:
+    get:
+      tags: [prayer]
+      parameters:
+        - { name: location_id, in: query, schema: { type: string } }
+        - { name: lat, in: query, schema: { type: number } }
+        - { name: lng, in: query, schema: { type: number } }
+        - { name: year, in: query, required: true, schema: { type: integer } }
+        - { name: month, in: query, required: true, schema: { type: integer, minimum: 1, maximum: 12 } }
+        - { name: method, in: query, schema: { type: integer, default: 20 } }
+        - { name: school, in: query, schema: { type: integer, enum: [0, 1], default: 0 } }
+        - { name: tz, in: query, schema: { type: string, default: Asia/Jakarta } }
+      responses:
+        '200': { description: Monthly schedule, content: { application/json: { schema: { $ref: '#/components/schemas/PrayerSchedule' } } } }
+        '503': { description: All providers failed — use on-device calculation, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  /v1/hijri/convert:
+    get:
+      tags: [hijri]
+      parameters: [ { name: date, in: query, required: true, schema: { type: string, format: date } } ]
+      responses: { '200': { description: Hijri date } }
+  /v1/hijri/calendar:
+    get:
+      tags: [hijri]
+      parameters:
+        - { name: year, in: query, required: true, schema: { type: integer } }
+        - { name: month, in: query, required: true, schema: { type: integer } }
+      responses: { '200': { description: Month calendar } }
+  /v1/hijri/holidays:
+    get:
+      tags: [hijri]
+      parameters: [ { name: hijri_year, in: query, required: true, schema: { type: integer } } ]
+      responses: { '200': { description: Holidays } }
+  /v1/qibla:
+    get:
+      tags: [qibla]
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number } }
+        - { name: lng, in: query, required: true, schema: { type: number } }
+      responses:
+        '200':
+          description: Bearing in degrees from true north
+          content: { application/json: { schema: { type: object, properties: { direction: { type: number, example: 295.16 } } } } }
+  /v1/doa:
+    get:
+      tags: [content]
+      parameters:
+        - { name: grup, in: query, schema: { type: string } }
+        - { name: tag, in: query, schema: { type: string } }
+      responses: { '200': { description: Doa list, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Doa' } } } } } }
+  /v1/doa/{id}:
+    get:
+      tags: [content]
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses: { '200': { description: Doa, content: { application/json: { schema: { $ref: '#/components/schemas/Doa' } } } } }
+  /v1/hadith/books:
+    get: { tags: [content], responses: { '200': { description: Books } } }
+  /v1/hadith/{book}:
+    get:
+      tags: [content]
+      parameters:
+        - { name: book, in: path, required: true, schema: { type: string, example: bukhari } }
+        - { name: from, in: query, schema: { type: integer, default: 1 } }
+        - { name: to, in: query, schema: { type: integer, default: 50 } }
+      responses: { '200': { description: Hadith range, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Hadith' } } } } } }
+  /v1/hadith/{book}/{number}:
+    get:
+      tags: [content]
+      parameters:
+        - { name: book, in: path, required: true, schema: { type: string } }
+        - { name: number, in: path, required: true, schema: { type: integer } }
+      responses: { '200': { description: Hadith, content: { application/json: { schema: { $ref: '#/components/schemas/Hadith' } } } } }
+  /v1/asmaul-husna:
+    get: { tags: [content], responses: { '200': { description: 99 names } } }
+  /healthz:
+    get: { tags: [ops], responses: { '200': { description: OK } } }
+  /readyz:
+    get: { tags: [ops], responses: { '200': { description: Ready }, '503': { description: Not ready } } }

@@ -1,0 +1,63 @@
+name: Quran data validation
+
+on:
+  push:
+    paths:
+      - "tools/build_quran_db/**"
+      - "apps/mobile/assets/db/**"
+      - "services/api/app/matching/normalize.py"
+      - "services/api/pyproject.toml"
+      - "services/api/uv.lock"
+      - "docs/06-DATA-MODEL.md"
+      - ".github/workflows/data-ci.yml"
+  pull_request:
+    paths:
+      - "tools/build_quran_db/**"
+      - "apps/mobile/assets/db/**"
+      - "services/api/app/matching/normalize.py"
+      - "services/api/pyproject.toml"
+      - "services/api/uv.lock"
+      - "docs/06-DATA-MODEL.md"
+      - ".github/workflows/data-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quran-data-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-quran-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            tools/build_quran_db/.cache
+            apps/mobile/assets/db/quran.sqlite
+            apps/mobile/assets/db/quran.sqlite.sha256
+          key: quran-sources-${{ runner.os }}-${{ hashFiles('tools/build_quran_db/sources.lock.json') }}
+
+      - name: Install API and data-builder dependencies
+        working-directory: services/api
+        run: uv sync --locked --extra dev
+
+      - name: Rebuild database from pinned source snapshots
+        run: uv run --project services/api python tools/build_quran_db/build.py
+
+      - name: Verify database source hashes and invariants
+        run: uv run --project services/api python tools/build_quran_db/verify.py
+
+      - name: Build and verify search index
+        run: uv run --project services/api python tools/build_quran_db/build_index.py

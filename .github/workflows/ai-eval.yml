@@ -1,0 +1,99 @@
+name: Voice Ayah Finder evaluation
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: golden-v1-evaluation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install evaluation dependencies
+        working-directory: services/api
+        run: uv sync --locked --extra dev
+
+      - name: Check for registered samples
+        id: dataset
+        run: |
+          count=$(python -c 'import csv; from pathlib import Path; p=Path("services/api/eval/golden-v1/manifest.csv"); print(sum(1 for _ in csv.DictReader(p.open(encoding="utf-8-sig"))))')
+          echo "sample_count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch private golden audio archive
+        if: steps.dataset.outputs.sample_count != '0'
+        env:
+          GOLDEN_V1_ARCHIVE_URL: ${{ secrets.GOLDEN_V1_ARCHIVE_URL }}
+          GOLDEN_V1_ARCHIVE_TOKEN: ${{ secrets.GOLDEN_V1_ARCHIVE_TOKEN }}
+        run: |
+          if [ -z "$GOLDEN_V1_ARCHIVE_URL" ]; then
+            echo "Registered golden samples require the GOLDEN_V1_ARCHIVE_URL repository secret." >&2
+            exit 1
+          fi
+          mkdir -p services/api/eval/golden-v1/audio
+          if [ -n "$GOLDEN_V1_ARCHIVE_TOKEN" ]; then
+            curl --fail --location --retry 2 \
+              --header "Authorization: Bearer $GOLDEN_V1_ARCHIVE_TOKEN" \
+              "$GOLDEN_V1_ARCHIVE_URL" --output /tmp/golden-v1-audio.tar.gz
+          else
+            curl --fail --location --retry 2 \
+              "$GOLDEN_V1_ARCHIVE_URL" --output /tmp/golden-v1-audio.tar.gz
+          fi
+          python - <<'PY'
+          import tarfile
+          from pathlib import Path
+
+          archive = tarfile.open("/tmp/golden-v1-audio.tar.gz", "r:gz")
+          for member in archive.getmembers():
+              path = Path(member.name)
+              if path.is_absolute() or ".." in path.parts or member.issym() or member.islnk():
+                  raise SystemExit(f"Unsafe archive member: {member.name}")
+          archive.extractall("services/api/eval/golden-v1/audio", filter="data")
+          PY
+          rm /tmp/golden-v1-audio.tar.gz
+
+      - name: Build Quran database and retrieval index
+        if: steps.dataset.outputs.sample_count != '0'
+        run: |
+          uv run --project services/api python tools/build_quran_db/build.py
+          uv run --project services/api python tools/build_quran_db/build_index.py
+
+      - name: Convert the ASR model
+        if: steps.dataset.outputs.sample_count != '0'
+        working-directory: services/api
+        run: |
+          uv sync --locked --extra dev --extra model-conversion
+          uv run python ../../tools/convert_model/convert.py
+
+      - name: Evaluate the golden set
+        working-directory: services/api
+        run: uv run python -m eval.run_eval --allow-empty --audio-root eval/golden-v1/audio
+
+      - name: Remove private audio from the runner
+        if: always()
+        run: rm -rf services/api/eval/golden-v1/audio /tmp/golden-v1-audio.tar.gz
+
+      - name: Commit the nightly report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/eval/golden-v1-report.md
+          if ! git diff --cached --quiet; then
+            git commit -m "docs(eval): update golden-v1 report"
+            git push
+          fi
