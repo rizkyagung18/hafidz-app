@@ -1,25 +1,31 @@
-# Offline Qur’an database builder
+# Local QUL Qur’an assets
 
-This tool creates `apps/mobile/assets/db/quran.sqlite` from locked upstream snapshots.
+This builder produces QUL-only `quran.sqlite` v3 with semantic Qur'an content and the Madinah 1405H print layout, plus the ASR search index. See [docs/12](../../docs/12-QUL-CORE-AND-LIVE-VOICE.md) for the content contract, [sources.lock.json](sources.lock.json) for semantic/layout inputs, and [print_sources.lock.json](print_sources.lock.json) for auxiliary font and ligature hashes.
 
-## Sources and attribution
+## Inputs
 
-- Qur’an Uthmani and Simple Clean text: Tanzil Project, text release 1.1. Preserve both text columns exactly as downloaded. Verbatim text may not be changed; the application must credit Tanzil and link to [tanzil.net](https://tanzil.net).
-- Page, juz, hizb-quarter, ruku, manzil, sajda, and surah metadata: AlQuran.cloud API and Tanzil Quran metadata XML. The builder cross-checks page and juz boundaries against Tanzil metadata; AlQuran.cloud supplies hizb-quarter because Tanzil's XML does not include those boundaries.
-- Indonesian translation, Latin transliteration, and tafsir: Kemenag RI data via EQuran.id. Attribution must credit Kemenag RI and EQuran.id. Review upstream redistribution terms before public release.
+Place the supplied QUL archives at their paths in `sources.lock.json`, under the ignored `tools/build_quran_db/.cache/` directory. Keep the original archives. The builder verifies every hash and fails if a file is missing or changed. It does not download sources or use Tanzil, AlQuran.cloud, or EQuran fallbacks. Do not commit or distribute the archives, generated database, index, or fonts until resource-specific redistribution rights are established.
 
-The normalized Arabic column is derived only for search. It must never be displayed as Qur’an text. The displayed Uthmani and Simple Clean columns remain source-exact.
+The print staging command also needs the QPC V1 page-font archive, the user-supplied QUL font ZIPs for the Surah header, top-left Surah name, and Juz/common glyphs, the pinned `surah_name_v1.ttf`, and the Surah header ligature map. All are listed in the locks. Install HarfBuzz's `hb-view` CLI locally to rasterize each color-font Surah header into a transparent PNG. Inspect or audit sources with `audit_qul_1405h.py` before staging. The staged mobile print pack is ignored by Git.
 
-## Build and verify
+## Local build and verification
 
-Run `python3 tools/build_quran_db/build.py --update-lock` once to fetch current snapshots, record their SHA-256 values in `sources.lock.json`, and build the database. Review source changes before updating those pins again.
+Run from the repository root:
 
-Later builds use the pinned cache and fail if a source hash changes. Run `python3 tools/build_quran_db/build.py` to build from pinned sources and `python3 tools/build_quran_db/verify.py` to check source identity, metadata, schema invariants, FTS, checksum, and size.
+```bash
+uv sync --project services/api --locked --extra dev
+uv run --project services/api python tools/build_quran_db/stage_mushaf_local.py
+uv run --project services/api python tools/build_quran_db/build.py
+uv run --project services/api python tools/build_quran_db/verify.py
+uv run --project services/api python tools/build_quran_db/build_index.py
+```
 
-Downloaded source snapshots are kept in the ignored `.cache/` directory. The generated SQLite database and checksum are local build artifacts; regenerate them before packaging the mobile app.
+The v3 builder checks 114 surahs, 6,236 canonical ayat, 604 page boundaries, 30 juz, 60 hizb, 83,668 print words, all source lines, and 722 font/header assets. The verifier compares those rows and hashes against the pinned QUL sources. The index embeds the database SHA-256 and is rejected by the backend if it differs. `stage_mushaf_local.py` writes the local font/header pack before the database build. Neither staging nor data verification establishes visual fidelity or redistribution rights.
 
-The Quran Foundation pre-live API contains only surahs 1 and 2. Therefore it cannot be used for a 6,236-ayah page comparison. Production Quran Foundation cross-checking is an optional release verification after production API access is approved.
+Run the source-independent audit tests anywhere:
 
-## Build the ASR search index
+```bash
+uv run --project services/api python -m unittest tools.build_quran_db.test_audit_qul_1405h tools.build_quran_db.test_preview_qul_1405h
+```
 
-From `services/api`, run `uv run python ../../tools/build_quran_db/build_index.py`. The builder reads the local Quran database, uses the shared normalizer, and writes `services/api/data/quran_index.pkl` plus its SHA-256 sidecar. The index contains all single-ayah units, every within-surah two- and three-ayah window, and reading aliases for muqatta'at. It checks unit counts, checksum, serialized size (under 30 MiB), and reload time (under one second).
+GitHub CI runs those source-independent tests and Dart source analysis. Full database, index, print, Flutter analysis, and reader tests run locally while the QUL resources remain untracked. Do not interpret a green CI result as a verified content build.

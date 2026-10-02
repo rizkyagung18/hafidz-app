@@ -6,9 +6,9 @@ Read it fully before writing code. Detailed specs live in `docs/`.
 ## 1. Project summary
 
 **Project name:** `Hafidz App` — a Muslim daily-needs app for Indonesia-first users with an AI feature:
-**Voice Ayah Finder** — the user records a short recitation (voice note), the backend transcribes it with
-`tarteel-ai/whisper-base-ar-quran`, matches the transcript to the exact ayah(s) of the Qur'an, and the app
-**automatically navigates to that ayah on its Mushaf page** with the ayah highlighted.
+**Voice Ayah Finder** — the Mushaf microphone streams recitation to the backend, which uses
+`tarteel-ai/whisper-base-ar-quran` and the QUL-based matcher to follow stable ayat live on the printed page.
+The existing one-shot endpoint remains for shared-file compatibility.
 
 Core modules: Qur'an reader (Mushaf + list mode), murottal audio, prayer times + adzan notification,
 qibla compass, Hijri calendar, daily du'a, hadith, asmaul husna, tasbih, bookmarks / last read, Voice Ayah Finder.
@@ -27,6 +27,8 @@ qibla compass, Hijri calendar, daily du'a, hadith, asmaul husna, tasbih, bookmar
 | `docs/08-ROADMAP-TASKS.md` | Milestones broken into agent-sized tasks with acceptance criteria |
 | `docs/09-TESTING-QA.md` | Test strategy, golden datasets, CI gates |
 | `docs/10-SECURITY-PRIVACY-LICENSING.md` | Voice data privacy, secrets, content licensing & attribution |
+| `docs/11-MUSHAF-1405H-REDESIGN.md` | Madinah 1405H print fidelity, pressable ayat, planned content rebuild and acceptance |
+| `docs/12-QUL-CORE-AND-LIVE-VOICE.md` | Current QUL-only content, Mushaf, navigation, and live Voice Finder contract; supersedes conflicting older plans |
 | `docs/adr/*.md` | Architecture Decision Records (why we chose X) |
 
 ## 3. Tech stack (authoritative — do not change without a new ADR)
@@ -37,7 +39,9 @@ qibla compass, Hijri calendar, daily du'a, hadith, asmaul husna, tasbih, bookmar
 - **Backend (BFF + AI):** Python 3.14, FastAPI, Uvicorn, `faster-whisper` (CTranslate2 int8) serving the
   converted `tarteel-ai/whisper-base-ar-quran` model, `rapidfuzz` for fuzzy matching, Redis (cache + rate limit),
   PostgreSQL (optional: users, sync, telemetry opt-in). Packaged with Docker.
-- **Data:** Bundled offline Qur'an DB (Tanzil Uthmani text + page/juz/hizb metadata + Kemenag Indonesian translation).
+- **Data:** Bundled offline Qur'an DB built exclusively from pinned QUL Qur'an content and metadata archives.
+  The 1405H print layer uses QUL KFGQPC V1 layout, word glyphs, and matching page fonts (ADR-006).
+  See docs/12 for versioning and local-only asset handling while redistribution rights remain unresolved.
 
 ## 4. Repository layout (target)
 
@@ -64,8 +68,8 @@ qibla compass, Hijri calendar, daily du'a, hadith, asmaul husna, tasbih, bookmar
 
 ```bash
 # Backend
-cd services/api && uv sync            # or: pip install -r requirements.txt
-uv run python -m tools.convert_model  # one-time model conversion (see docs/03)
+cd services/api && uv sync --locked --extra dev
+uv run python ../../tools/convert_model/convert.py  # one-time model conversion (see docs/03)
 uv run uvicorn app.main:app --reload --port 8000
 uv run pytest -q
 uv run ruff check . && uv run mypy app
@@ -77,26 +81,38 @@ flutter test
 flutter analyze
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
 
+# From repository root, after staging the pinned local QUL archives
+cd ../..
+uv run --project services/api python tools/build_quran_db/build.py
+uv run --project services/api python tools/build_quran_db/verify.py
+uv run --project services/api python tools/build_quran_db/build_index.py
+uv run --project services/api python tools/build_quran_db/stage_mushaf_local.py
+
 # Infra
 docker compose -f infra/docker-compose.yml up --build
 ```
 
 ## 6. Non-negotiable rules
 
-1. **Never modify, re-typeset, or "correct" Qur'an text.** Display text must be byte-identical to the licensed source
-   (Tanzil / Quran Foundation / Kemenag). Normalized text is used **only** inside the search index and is never displayed.
+1. **Never modify or "correct" Qur'an text.** Canonical display and copy text must be byte-identical to the
+   pinned QUL Uthmani source; Indonesian ayah translation is byte-identical to its pinned QUL source.
+   Normalized text is used **only** inside the search index and is never displayed.
+   Mushaf glyph strings are separate presentation data: preserve source glyphs, word order, and prescribed lines;
+   never substitute them for canonical text in search, ASR, copy/share, or accessibility speech.
 2. **Never ship third-party secrets in the mobile app.** Quran Foundation `client_secret` and any API keys live only in
    the backend (`.env`, secret manager). The app talks to our BFF.
 3. **Voice notes are ephemeral.** Do not persist raw audio on the server by default. Process in memory, delete after
    inference. Storing audio for model improvement requires explicit opt-in (see docs/10).
-4. **Every external API call goes through a client class** with timeout (≤10 s), retry with exponential backoff + jitter
-   (max 2 retries, only on 429/5xx/network), response caching, and a documented fallback provider (docs/04).
+4. **Daily-needs external API calls go through client classes** with timeout (≤10 s), retry with exponential
+   backoff + jitter (max 2 retries, only on 429/5xx/network), and response caching (docs/04).
 5. **Offline first.** Qur'an reading, bookmarks, tasbih, du'a (after first sync), and prayer-time calculation must work
-   without network. Only Voice Ayah Finder and hadith browsing require network in v1.
+   without network. Live Voice Ayah Finder requires a network connection; hadith browsing is deferred.
 6. **Ayah identifiers** are always `surah:ayah` strings (e.g. `2:255`) or `(surah INT, ayah INT)`. Global ayah index
-   (1..6236) is allowed internally. Mushaf page numbers refer to the **Madani 604-page** layout.
-7. **Arabic rendering:** RTL, Uthmani-capable font (e.g. KFGQPC Uthmanic Script HAFS / Amiri Quran). Do not strip
-   diacritics in UI.
+   (1..6236) is allowed internally. The target Mushaf edition is **Madinah 1405H / KFGQPC V1, 604 pages**.
+   Resolve canonical ayat through that edition's local mapping; do not assume another edition's page boundaries match.
+7. **Arabic rendering:** RTL, without stripping diacritics. List mode uses the QUL Me Quran font.
+   Mushaf mode must use the matching QPC V1 page fonts and fixed source lines (docs/11 and ADR-006), with
+   zoom rather than reflow. Missing edition fonts are an asset error, not permission to substitute another font.
 8. Keep attribution screens up to date when adding any content source (docs/10 §4).
 9. Write tests for every matcher change; the golden-set accuracy in docs/09 must not regress.
 

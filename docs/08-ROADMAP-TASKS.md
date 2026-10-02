@@ -9,7 +9,7 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 |---|---|---|
 | **M0 Foundation** (week 1) | Repo, CI, data build, model conversion | `quran.sqlite` + `quran_index.pkl` built & verified in CI; model converted |
 | **M1 AI core** (weeks 2–3) | BFF voice endpoint + matcher + golden eval | Top-1 ≥ 90 % on golden-v1; p95 server latency ≤ 1.5 s |
-| **M2 App core** (weeks 3–5) | Flutter shell, Qur'an reader, Voice Ayah Finder UI | End-to-end: record → page highlight on device |
+| **M2 App core** (weeks 3–5; re-estimate after T-M04-R1/R2) | Flutter shell, 1405H print-faithful Qur'an reader, Voice Ayah Finder UI | Approved 1405H appearance + pressable ayat; end-to-end record → page highlight on device |
 | **M3 Daily needs** (weeks 5–7) | Prayer + adzan, qibla, hijri, doa, murottal | PRD F-03..F-08 ACs pass |
 | **M4 Content & polish** (weeks 7–8) | Hadith, tafsir, asmaul husna, tasbih, search, settings, attribution | All P0/P1 ACs; accessibility pass |
 | **M5 Beta** (weeks 9–10) | Observability, load test, closed beta (Play Console internal track) | Crash-free ≥ 99.5 %, no P0 bugs |
@@ -32,6 +32,13 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 - `sources.lock.json` pins URLs + SHA-256; build is reproducible (same inputs ⇒ same DB hash).
 - Cross-check AlQuran.cloud page/juz data against full-Qur'an Tanzil metadata; range-check its hizb-quarter data because Tanzil metadata has no hizb-quarter boundaries. A Quran Foundation full-Qur'an check is optional after production access is approved because pre-live only includes surahs 1–2.
 - AC: invariants pass; `2:255 → page 42`; DB ≤ 25 MB.
+
+**T-F02-QUL QUL content migration** — deps: T-F02, T-F04, T-M02; active replacement task
+- Status: local v2 build, verifier, index, Drift loader, and user-data retention tests pass. Archive and generated
+  asset redistribution remains pending; CI cannot run the full content build without the local QUL inputs.
+- Rebuild the semantic Qur'an DB as v2 from pinned local QUL ZIPs: Uthmani, Imlaei Simple, Indonesian translation, Surah/Ayah/Juz/Hizb/Sajda metadata, and 1405H layout/word mapping. Preserve 6,236 global IDs and `user.sqlite`.
+- Rebuild FTS and the backend matcher index; update Drift, the loader, voice metadata, source attribution, and contracts together. Latin, tafsir, Surah meanings, Rub, Manzil, and Ruku are deferred.
+- AC: complete source-key coverage, 114 surahs, 6,236 ayat, 604 pages, 30 juz, 60 hizb, exact source text/hash checks, v1→v2 user-data preservation, and no dependency on legacy Qur'an providers. QUL assets remain local until redistribution rights are established.
 
 **T-F03 Normalization module** — deps: T-F01
 - `services/api/app/matching/normalize.py` exactly as docs/03 §4 + `cleanup_query()` (isti'adha, basmala, sadaqa).
@@ -80,6 +87,12 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
   `X-Device-Id`, error mapping to `AppError`.
 - AC: all routes navigable with placeholder screens; dark/light/sepia switch.
 
+**T-M01-R1 Navigation and visual refresh** — deps: T-F02-QUL, T-M03
+- Status: implemented and covered by local Flutter tests; iOS Simulator launch confirmed the Surah-list start.
+- Launch on Surah list; tabs Al-Qur'an, Sholat, Belajar, Lainnya. Put Kiblat under Lainnya. Surah tap offers Mushaf, Surah & Translation, and Murattal (coming soon until T-D05).
+- Use warm cream, forest green, and muted gold outside the source-faithful Mushaf canvas. The mic FAB appears only on the Mushaf screen; Belajar is a clearly labeled Hafalan preview.
+- AC: routes and deep links remain valid, four tabs and Surah actions work, and no Home/Qibla tab or mic control outside Mushaf remains.
+
 **T-M02 Local DB layer** — deps: T-F02, T-M01
 - drift definitions for `quran.sqlite` (read-only, copied from assets with version check) and `user.sqlite`.
 - Repositories: `QuranRepository` (surahs, ayah by key, page, juz, search), `BookmarkRepository`, `ReadingRepository`.
@@ -89,13 +102,82 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 - AC: PRD F-02 AC1, AC3; smooth scrolling 60 fps through Al-Baqarah (286 ayat).
 
 **T-M04 Mushaf page reader + highlight** — deps: T-M02
-- RTL PageView, page layout, `ReaderController.highlight`, route `/quran/page/:p?ayah=&hl=1`.
-- AC: deep link `hafidz://quran/ayah/2:255` opens page 42 and pulses 2:255.
+- Status: **reopened for redesign, 2026-09-30**. Existing flowing-text prototype is retained, but does not meet
+  the requested print fidelity. Earlier routing/widget tests do not complete the replacement.
+- Target: **Madinah 1405H / KFGQPC V1** fixed-page rendering with pressable ayat. Follow
+  [docs/11](11-MUSHAF-1405H-REDESIGN.md), [ADR-006](adr/ADR-006-madinah-1405h-mushaf.md), and PRD F-02.
+- AC: all 604 pages preserve source lines/glyphs/headings/basmala and approved print proportions; words and end
+  markers select canonical ayat accurately under zoom; complete offline use; jumps and range highlight work.
+  `hafidz://quran/ayah/2:255` opens page 42 and pulses only its segments for four seconds.
+- The following tasks are **planned**, not implemented by the documentation update. Execute one at a time.
 
-**T-M05 Voice Ayah Finder UI** — deps: T-M04, T-A04
-- `VoiceController` state machine (docs/07 §3), recorder config, client VAD, upload with cancel, decision logic
-  using server thresholds, candidate sheet, not-found, history table.
-- AC: PRD US-01.1 AC1–AC12 (widget tests with mocked repository + one integration test against local BFF).
+**T-M04-R1 Audit and pin the 1405H source set** — deps: T-M02
+- Status: technical source audit passed on 2026-10-01. Layout, word-glyph, and all 604 page-font exports are
+  pinned in `tools/build_quran_db/qul_1405h_source_manifest.json`. All 6,236 ayat map with zero legacy page
+  differences and zero missing page glyphs. Resource-specific redistribution evidence is still pending.
+- Inspect QUL layout 15, glyphs 57, fonts 238, and required heading/basmala/ornament assets. Record actual schemas,
+  IDs, source revision or snapshot date, SHA-256, resource-specific licensing evidence, and archive/installed sizes.
+- Compare all edition page boundaries against the existing DB; document the import mapping and source exceptions.
+- AC: reviewable source manifest + schema map + full page-difference report. Confirm complete font/glyph coverage
+  and redistribution terms before packaging. Unresolved source gaps remain explicit; do not substitute V2 or
+  claim that unverified images/coordinates exist. Report feasibility of the provisional 60 MB budget.
+
+**T-M04-R2 Prove the printed appearance and touch geometry** — deps: T-M04-R1
+- Status: local browser proof generated for all seven representative pages. Provisional Flutter pages 1, 48,
+  and 604 were screenshot inspected on an iOS Simulator; page 128 was inspected on iOS and Android after the
+  full-height, full-width banner change. A page-4 widget-rendered image was compared with the denser reader
+  reference after QPC glyph sizing was corrected. Page 42 deep-link, word-tap, and zoomed word-tap tests pass.
+  Final Android/iOS comparison at the denser glyph size, memory/performance profiling, user appearance review,
+  and rights are open.
+- Build a limited visual proof for pages 1, 2, 42, 48, 121, 187, and 604 using the exact V1 fonts and source lines.
+  Establish fixed design metrics, headings, basmala treatment, and auxiliary artwork against 1405H references.
+- Derive token selection boxes from shaped lines; demonstrate a pressable multi-line ayah at default scale and
+  zoom. Measure font/geometry memory use during repeated traversal, including engine-held fonts; plan a bounded cache.
+- AC: iOS and Android visual comparisons plus a concrete appearance review by the user **before full integration**.
+  No reflow or fallback font. Resolve source/renderer discrepancies before proceeding to the content rebuild.
+
+**T-M04-R3 Rebuild the immutable Mushaf package** — deps: T-M04-R2, T-F02-QUL
+- Extend the v2 semantic DB to a v3 print package with QUL page, line, word, font and source-asset membership. Do not use the flowing-text prototype as the final Mushaf.
+- Add the planned edition/page/line/word/asset contracts in docs/06 §1.1; preserve canonical text and IDs. Pin and
+  verify matching assets. Coordinate schema v3 across builder, verifier, Drift, loader, and checksum handling.
+- AC: complete 604-page and 6,236-ayah membership verified; font coverage and hashes pass; source-driven line
+  exceptions and markers handled. A v1 user fixture retains bookmarks, notes, reading position, and progress.
+  Mixed/corrupt assets fail safely; old verified data survives a failed update. Reuse a compatible v3 pack after
+  a v3 update failure; a failed first v2 → v3 transition shows a recoverable error without claiming v2 renders
+  the new print. Keep v1 server distribution compatible.
+
+**T-M04-R4 Replace the reader and ayah interactions** — deps: T-M04-R3
+- Fixed-page RTL reader, fit-page default, pinch/pan without reflow. Share measured geometry between rendering,
+  highlights, and inverse-transform hit tests. Words/end markers open canonical ayah actions; decorations do not.
+- AC: translation/bookmark/copy/share actions use canonical data. Four-second pulse, persistent subtle
+  marker, multi-line and cross-page range selection pass; gesture drags do not select ayat. Canonical accessibility
+  labels and the independent list reader remain usable. Playback integration remains T-D05.
+
+**T-M04-R5 Integrate navigation and accept the replacement** — deps: T-M04-R4
+- Resolve page/juz/surah/ayah jumps, links, saved positions, and voice/audio navigation entry points from the
+  local edition map; keep existing route and highlight interfaces compatible.
+- AC: docs/09 §6 data, visual, interaction, migration, and offline cases pass; page 42 deep link pulses 2:255
+  for four seconds. All pages work after fresh install in airplane mode. User reviews print fidelity; profile
+  builds meet the 60 fps target on a chosen mid-range device; record bundle sizes and memory. Complete T-M04
+  only after this evidence is recorded. Do not implement T-M05 or T-D05 as part of these reader tasks.
+
+**T-M05 Voice Ayah Finder UI** — deps: T-M04-R5, T-A04
+- Status: live capture, bounded framing, stable range follow, pause/resume, retry, and automated widget/transport
+  tests implemented locally. On an iOS Simulator, live recitation followed Al-Baqarah 2:256 → 2:257 and turned
+  page 42 → 43; the first pass took more than five seconds. A shorter inference cadence is implemented and its
+  simulator retest is pending. Physical iPhone validation is deferred by user; T-M04-R5 checks are also deferred.
+- Put the sole visible mic entry on the Mushaf outside its print canvas. Connect live PCM capture and stable ayah
+  events to the fixed-page highlight; preserve `/voice` for shared files and existing links. See docs/12.
+- AC: a session can keep listening, follow successive ayat across page boundaries, pause/stop, recover from
+  disconnect, and avoid unstable jumps on repeated ayat. No raw audio persistence; device integration proof.
+
+**T-A06 Live Voice Finder backend** — deps: T-A04, T-F02-QUL
+- Status: bounded WebSocket, worker limit, stable-event protocol, cleanup and simulated streaming tests implemented
+  locally. Real streaming latency/accuracy remain unmeasured while the consented golden set is empty.
+- Add bounded WebSocket `/v1/voice/live` with ordered PCM chunks, rolling ASR windows, continuity/hysteresis,
+  stable canonical ayah events, explicit backpressure, disconnect cleanup, and rate/connection limits (docs/12).
+- AC: protocol, cleanup, bounded-memory, repeated-ayah, and simulated streaming tests pass. Report measured live
+  latency/accuracy only after a nonempty consented streaming golden set exists.
 
 **T-M06 Share-to-app audio** — deps: T-M05
 - Android intent filter + iOS share extension; transcode to 16 kHz mono (e.g. `ffmpeg_kit_flutter_min` or native) and
@@ -120,7 +202,7 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 **T-D04 Qibla** — deps: T-M01
 - AC: bearing Jakarta (−6.2, 106.8) = 295.2° ± 0.2 (matches Aladhan 295.16°); calibration prompt.
 
-**T-D05 Murottal player** — deps: T-M03, T-M04
+**T-D05 Murottal player** — deps: T-M03, T-M04-R5
 - Reciters endpoint + app player per docs/07 §5; follow-along highlight; downloads.
 - AC: PRD F-03 AC1–AC3; background playback with lock-screen controls.
 
@@ -150,5 +232,5 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 ## Phase 2 backlog (post-MVP)
 
 On-device ASR (whisper.cpp / sherpa-onnx) + Dart matcher port · user accounts & sync · streaming follow-along
-recitation · recitation mistake hints · Qur'an glyph-accurate Mushaf (QCF fonts) · widgets (home-screen prayer
+recitation · recitation mistake hints · additional Mushaf print editions (1405H is required in M2) · widgets (home-screen prayer
 widget) · Wear OS / watchOS prayer complications.

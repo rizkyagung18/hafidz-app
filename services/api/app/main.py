@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import asyncio
 import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from app.matching.index import load_index
 from app.matching.matcher import MatchThresholds, QuranMatcher
 from app.matching.metadata import QuranMetadata
 from app.routers.health import router as health_router
+from app.routers.live_voice import router as live_voice_router
 from app.routers.voice import (
     VoiceMetrics,
     install_voice_error_handlers,
@@ -66,6 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.quran_matcher = matcher
     app.state.quran_metadata = metadata
     app.state.redis = redis
+    app.state.live_inference_slots = asyncio.Semaphore(asr_settings.num_workers)
     app.state.voice_metrics = VoiceMetrics()
     try:
         yield
@@ -76,6 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.quran_matcher = None
         app.state.quran_metadata = None
         app.state.redis = None
+        app.state.live_inference_slots = None
 
 
 app = FastAPI(
@@ -86,5 +90,6 @@ app = FastAPI(
 )
 app.include_router(health_router)
 app.include_router(voice_router)
+app.include_router(live_voice_router)
 app.include_router(metrics_router)
 install_voice_error_handlers(app)

@@ -1,5 +1,7 @@
 # 01 — Product Requirements Document (PRD)
 
+**Current focus and acceptance:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md). The requested core is QUL 1405H Mushaf layout, clickable ayat, and live Voice Finder that follows ongoing recitation. Latin, hadith, tafsir, and Surah meanings are deferred and hidden; earlier feature-priority descriptions below are superseded for this milestone.
+
 | Field | Value |
 |---|---|
 | Product | Hafidz App — Muslim Daily Companion with Voice Ayah Finder |
@@ -42,7 +44,7 @@ voice recitation into the exact Mushaf page and ayah.
 | ID | Feature | Priority |
 |---|---|---|
 | F-01 | **Voice Ayah Finder** (record → detect → auto-navigate + highlight) | P0 |
-| F-02 | Qur'an reader: Mushaf page mode (604 pages) + list (surah) mode, Arabic + Latin + Indonesian translation | P0 |
+| F-02 | Qur'an reader: Madinah 1405H Mushaf (604 pages, pressable ayat) + list (surah) mode, Arabic + Latin + Indonesian translation | P0 |
 | F-03 | Murottal audio: per-ayah and full-surah playback, 6+ qari, repeat / range play, follow-along highlight | P0 |
 | F-04 | Prayer times (Kemenag-accurate for Indonesia; calculation worldwide) + adzan notifications | P0 |
 | F-05 | Qibla compass | P0 |
@@ -75,7 +77,8 @@ Acceptance criteria:
 - AC3: Recording auto-stops after 2.0 s of silence (VAD) or at 30 s; user can stop manually.
 - AC4: While processing, a progress state "Mencari ayat…" is shown; request can be cancelled.
 - AC5: If `confidence ≥ 0.80` and the top result is unambiguous (margin ≥ 0.10 over #2), the app navigates directly to
-  `/quran/page/{page}?ayah={s}:{a}` and highlights the ayah range for 4 s (then keeps a subtle marker).
+  `/quran/page/{page}?ayah={s}:{a}` and highlights the ayah range for 4 s (then keeps a subtle marker). Resolve
+  `{page}` from the canonical ayah in the local 1405H edition; the existing API page field remains compatible.
 - AC6: If `0.55 ≤ confidence < 0.80` or ambiguous, show a bottom sheet with top-3 candidates (surah name, ayah number,
   Arabic snippet, translation snippet); tapping navigates.
 - AC7: If `confidence < 0.55`, show "Ayat tidak ditemukan" with tips (recite clearly, reduce background noise, 5–15 s).
@@ -91,12 +94,23 @@ and get the same detection result.
 - AC1: Android intent filter + iOS share extension accept `audio/*`; file is transcoded to 16 kHz mono before upload.
 
 ### F-02 Qur'an reader
+
+Mushaf requirements revised 2026-09-30: the flowing-text T-M04 prototype is not accepted as print-faithful.
+The replacement is planned in [docs/11](11-MUSHAF-1405H-REDESIGN.md), not yet implemented.
+
 - AC1: 114 surah list with Arabic name, Latin name, meaning, ayah count, place of revelation.
-- AC2: Mushaf mode renders 604 pages, swipe RTL, jump to page/juz/surah/ayah.
+- AC2: Mushaf mode reproduces the **Madinah 1405H / KFGQPC V1** print across 604 pages: source glyphs, fixed
+  lines, page boundaries, headings, basmala placement, and verse ornaments. Ordinary pages use 15 lines; opening
+  pages and special rows follow the source. Fit the whole page at default zoom; pinch/pan without reflow.
+  Swipe RTL and jump to page/juz/surah/ayah using this edition's mapping.
 - AC3: List mode shows per-ayah Arabic, transliteration (toggle), Indonesian translation (toggle), audio button, bookmark,
   share, copy, tafsir.
-- AC4: Fully offline after install.
-- AC5: Deep link `hafidz://quran/ayah/2:255` and `hafidz://quran/page/42` work (used by Voice Ayah Finder).
+- AC4: Fully offline after install, including all 604 pages and their matching layout, glyphs, and fonts.
+- AC5: Deep link `hafidz://quran/ayah/2:255` resolves locally to page 42 and pulses only 2:255 for four seconds;
+  `hafidz://quran/page/42` opens that edition's page. Preserve multi-line and cross-page range highlighting.
+- AC6: Tap any word or numbered end marker to select its canonical ayah, highlight its segments, and open
+  translation, tafsir, bookmark, copy, and share actions. Long press exposes the same actions. Headers, blank
+  space, frames, and unnumbered basmala rows do not select an unrelated ayah. Selection remains accurate under zoom.
 
 ### F-03 Murottal
 - AC1: Choose qari; play ayah / range / surah; background playback with lock-screen controls.
@@ -122,10 +136,10 @@ See docs/07 for screen specs; acceptance: data loads, offline cache, empty/error
 | Category | Requirement |
 |---|---|
 | Performance | Cold start ≤ 2 s on mid-range Android (Snapdragon 6xx); Mushaf page swipe 60 fps |
-| App size | ≤ 60 MB base (Qur'an DB + fonts bundled; Mushaf page images or glyph fonts downloaded on demand) |
+| App size | ≤ 60 MB base is provisional until the complete 1405H bundle is measured. Preserve complete offline reading after install; any size/offline tradeoff needs a documented decision (docs/11 §5). |
 | Offline | F-02, F-04 (calc fallback), F-05, F-06, F-11, F-12 fully offline |
 | Privacy | Voice processed ephemerally; no raw audio stored without opt-in; no PII required |
-| Accessibility | Dynamic font size, TalkBack/VoiceOver labels, contrast ≥ 4.5:1 |
+| Accessibility | Dynamic font size for list reader and controls; fixed Mushaf page supports zoom and canonical ayah semantics without reflow. TalkBack/VoiceOver labels, contrast ≥ 4.5:1. |
 | i18n | `id` (default), `en`; Arabic content always RTL |
 | Availability (backend) | 99.5 % monthly |
 | Scalability | ASR service horizontally scalable; 50 req/s sustained on 4 CPU pods (base model int8) |

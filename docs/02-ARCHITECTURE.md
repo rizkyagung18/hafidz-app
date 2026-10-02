@@ -1,5 +1,7 @@
 # 02 — System Architecture
 
+**Current target:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) supersedes legacy Qur'an provider arrows and the one-shot-only flow below. QUL is the sole Qur'an content/build source; the Tarteel ASR model remains separate. Live follow adds a bounded WebSocket service and stable canonical ayah events.
+
 ## 1. Architectural style
 
 - **Offline-first mobile client** with a bundled Qur'an database.
@@ -83,6 +85,7 @@ sequenceDiagram
   M-->>API: candidates [{surah, ayah_start, ayah_end, page, score}]
   API-->>App: 200 {transcript, best, candidates, confidence}
   alt confidence ≥ 0.80 and unambiguous
+    App->>App: Resolve canonical ayah to local 1405H page
     App->>App: go_router → /quran/page/{page}?ayah=s:a-b (highlight)
   else 0.55–0.80
     App->>U: Bottom sheet with top-3 candidates
@@ -102,7 +105,30 @@ sequenceDiagram
 | BFF | FastAPI + Pydantic v2 | Python shares runtime with ASR; OpenAPI auto-generated | ADR-002 |
 | Cache | Redis | TTL cache for provider responses, token cache, rate limit | — |
 | Offline Qur'an | Bundled SQLite (Tanzil Uthmani + metadata + Kemenag translation) | Offline-first, fast navigation, deterministic page mapping | ADR-004 |
+| Mushaf presentation (planned) | QUL 1405H fixed lines + V1 word glyphs + matching page fonts | Reproduce the selected print with pressable ayat; preserve canonical text separately | ADR-006 |
 | Prayer (ID) | equran.id / myQuran (Kemenag) + on-device `adhan` calc fallback (KEMENAG params) | Official Indonesian schedule; works offline | ADR-005 |
+
+### 5.1 Madinah 1405H presentation layer (planned)
+
+The T-M04 paragraph renderer is a prototype awaiting replacement. The proposed inputs are QUL layout resource
+15, word-glyph resource 57, and font resource 238; see [the source audit and plan](11-MUSHAF-1405H-REDESIGN.md).
+QUL is a build-time download source, with no runtime dependency for reading.
+
+The mobile content DB v2 will add edition, asset, page, line, and word records beside unchanged canonical ayat
+(docs/06 §1.1). A fixed-page renderer shapes the source's prescribed lines with the exact page font. It derives
+word bounds from that shaped output and groups them by canonical ayah for touch targets and highlight segments.
+Drawing and hit testing share the page-fit/zoom transform; no upstream pixel-coordinate package is assumed.
+
+Navigation from voice, search, or bookmarks resolves `surah:ayah` through the local 1405H mapping. Existing API
+`page` fields and server index assets remain compatible; they do not override this edition's mapping. The list
+reader, ASR matcher, clipboard, and accessibility labels continue using canonical text, never glyph encodings.
+
+Install the validated DB and matching font/layout package together. Preserve `user.sqlite` and fail visibly on
+missing or mismatched assets. Bundle complete offline coverage, with a bounded font/geometry cache; measure
+actual download size, installed size, and memory before resolving the provisional 60 MB budget. Exact resource
+schemas, licenses, auxiliary artwork, and visual fidelity are validation gates, not completed work.
+
+See [ADR-006](adr/ADR-006-madinah-1405h-mushaf.md) for the decision and alternatives.
 
 ## 6. Deployment
 

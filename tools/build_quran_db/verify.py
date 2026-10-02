@@ -1,174 +1,198 @@
-"""Verify the bundled database against its pinned source snapshots and schema."""
+"""Verify the generated QUL-only semantic database against pinned source ZIPs."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
-from pathlib import Path
-from typing import Any
 
-from build import (
+from build import (  # type: ignore[import-not-found]
+    EXPECTED_AYAT,
     OUTPUT,
     SIDECAR,
+    EDITION,
     BuildError,
-    _load_all_payloads,
-    _parse_tanzil_text,
-    _read_lock,
-    load_sources,
+    _map_parts,
+    _page_mapping,
+    _verses,
     normalize_ar,
+    open_source,
+    read_lock,
+    read_print_pack,
     sha256_bytes,
+    source_path,
 )
 
 
-def _require(condition: bool, message: str) -> None:
+def require(condition: bool, message: str) -> None:
     if not condition:
         raise BuildError(message)
 
 
-def _meta(connection: sqlite3.Connection) -> dict[str, str]:
-    return dict(connection.execute("SELECT key, value FROM meta"))
-
-
 def verify() -> list[str]:
-    _require(OUTPUT.is_file(), f"Database does not exist: {OUTPUT}")
-    _require(SIDECAR.is_file(), f"Database checksum sidecar does not exist: {SIDECAR}")
-    sources = load_sources(offline=True)
-    lock = _read_lock()
-    data = _load_all_payloads(sources)
-    passed: list[str] = []
-
-    source_hashes = {
-        name: sha256_bytes(content) for name, content in sources["files"].items()
-    }
-    from build import SOURCE_DEFINITIONS, aggregate_digest
-
-    for name, group in sources["groups"].items():
-        definition = SOURCE_DEFINITIONS[name]
-        source_hashes[name] = aggregate_digest(
-            [
-                (definition["file"].format(surah=surah), content)
-                for surah, content in group.items()
-            ]
-        )
-    _require(
-        all(lock["sources"][name]["sha256"] == digest for name, digest in source_hashes.items()),
-        "One or more cached source hashes differ from sources.lock.json",
-    )
-    passed.append("Pinned upstream source hashes match the cached files")
-
-    database_hash = sha256_bytes(OUTPUT.read_bytes())
-    sidecar_hash = SIDECAR.read_text(encoding="utf-8").split()[0]
-    _require(database_hash == sidecar_hash, "Database file does not match its SHA-256 sidecar")
-
-    connection = sqlite3.connect(f"file:{OUTPUT}?mode=ro", uri=True)
-    connection.row_factory = sqlite3.Row
+    require(OUTPUT.is_file() and SIDECAR.is_file(), "QUL database or checksum is missing")
+    lock = read_lock()
+    for name in lock["sources"]:
+        source_path(lock, name)
+    print_lock, manifest, manifest_digest, assets = read_print_pack(lock)
+    passed = ["All pinned QUL archive hashes match"]
+    digest = sha256_bytes(OUTPUT.read_bytes())
+    require(SIDECAR.read_text(encoding="utf-8").split()[0] == digest,
+            "QUL database checksum mismatch")
+    db = sqlite3.connect(f"file:{OUTPUT}?mode=ro", uri=True)
+    db.row_factory = sqlite3.Row
+    sources = {name: open_source(lock, name) for name in (
+        "uthmani", "imlaei_simple", "translation_id", "ayah_metadata", "surah_metadata",
+        "juz_metadata", "hizb_metadata", "sajda_metadata", "layout_1405h", "word_glyphs_1405h",
+    )}
     try:
-        _require(connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLite integrity check failed")
-        _require(not list(connection.execute("PRAGMA foreign_key_check")), "Foreign-key check failed")
+        require(db.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLite integrity failed")
+        require(db.execute("PRAGMA foreign_key_check").fetchone() is None, "Foreign keys failed")
+        require(db.execute("PRAGMA user_version").fetchone()[0] == 3, "Wrong user_version")
+        meta = dict(db.execute("SELECT key,value FROM meta"))
+        require(meta.get("db_version") == "3" and meta.get("source") == "QUL", "Wrong DB source/version")
+        require(json.loads(meta["sources_json"]) == lock, "DB source lock does not match")
+        require(json.loads(meta["print_sources_json"]) == print_lock,
+                "DB print source lock does not match")
+        require(meta.get("print_manifest_sha256") == manifest_digest and
+                meta.get("print_edition") == EDITION, "DB print manifest identity differs")
+        counts = {name: db.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
+                  for name in ("surah", "ayah", "page", "juz", "hizb", "tafsir")}
+        require(counts == {"surah": 114, "ayah": 6236, "page": 604, "juz": 30,
+                           "hizb": 60, "tafsir": 0}, f"Unexpected row counts: {counts}")
+        require(db.execute("SELECT MIN(id),MAX(id) FROM ayah").fetchone()[:] == (1, 6236),
+                "Global ayah ID range changed")
+        require(db.execute("SELECT SUM(ayah_count) FROM surah").fetchone()[0] == EXPECTED_AYAT,
+                "Surah counts do not sum to 6236")
+        require(db.execute("SELECT COUNT(*) FROM surah WHERE translation_id IS NOT NULL OR translation_en IS NOT NULL").fetchone()[0] == 0,
+                "Unsourced Surah meanings must be null")
+        require(db.execute("SELECT COUNT(*) FROM ayah WHERE text_latin IS NOT NULL OR translation_en IS NOT NULL OR hizb_quarter IS NOT NULL OR ruku IS NOT NULL OR manzil IS NOT NULL").fetchone()[0] == 0,
+                "Unsourced optional ayah fields must be null")
+        passed.append("Schema v3 semantic counts, IDs, and deferred fields are valid")
 
-        meta = _meta(connection)
-        _require(meta.get("db_version") == "1", "Unexpected database schema version")
-        _require(meta.get("tanzil_version") == lock["tanzil_text_version"], "Tanzil version metadata mismatch")
-        source_fingerprint = hashlib.sha256(
-            json.dumps(source_hashes, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        _require(meta.get("sha256") == source_fingerprint, "Source fingerprint metadata mismatch")
-        sources_json: dict[str, Any] = json.loads(meta["sources_json"])
-        _require(sources_json["sources"] == lock["sources"], "Database source manifest differs from lockfile")
-
-        counts = {
-            "surah": int(connection.execute("SELECT COUNT(*) FROM surah").fetchone()[0]),
-            "ayah": int(connection.execute("SELECT COUNT(*) FROM ayah").fetchone()[0]),
-            "page": int(connection.execute("SELECT COUNT(*) FROM page").fetchone()[0]),
-            "juz": int(connection.execute("SELECT COUNT(*) FROM juz").fetchone()[0]),
-            "tafsir": int(connection.execute("SELECT COUNT(*) FROM tafsir").fetchone()[0]),
-        }
-        _require(counts["surah"] == 114, f"Expected 114 surahs; got {counts['surah']}")
-        _require(counts["ayah"] == 6236, f"Expected 6,236 ayahs; got {counts['ayah']}")
-        _require(counts["page"] == 604, f"Expected 604 pages; got {counts['page']}")
-        _require(counts["juz"] == 30, f"Expected 30 juz; got {counts['juz']}")
-        _require(counts["tafsir"] == 6236, f"Expected 6,236 tafsir rows; got {counts['tafsir']}")
-        _require(
-            connection.execute("SELECT MIN(id), MAX(id) FROM ayah").fetchone()[:] == (1, 6236),
-            "Global ayah IDs are not contiguous from 1 to 6,236",
-        )
-        _require(
-            connection.execute("SELECT SUM(ayah_count) FROM surah").fetchone()[0] == 6236,
-            "Surah ayah counts do not sum to 6,236",
-        )
-        _require(
-            not list(
-                connection.execute(
-                    "SELECT number FROM surah s WHERE ayah_count != "
-                    "(SELECT COUNT(*) FROM ayah a WHERE a.surah=s.number)"
-                )
-            ),
-            "A surah's stored ayah count does not match its ayah rows",
-        )
-        _require(
-            connection.execute("SELECT MAX(page), MAX(juz) FROM ayah").fetchone()[:] == (604, 30),
-            "Page or juz range does not reach expected maximum",
-        )
-        passed.append("Database counts, IDs, and schema invariants are valid")
-
-        tanzil_uthmani = _parse_tanzil_text(sources["files"]["tanzil_uthmani"], "Tanzil Uthmani")
-        tanzil_simple = _parse_tanzil_text(sources["files"]["tanzil_simple_clean"], "Tanzil Simple Clean")
-        cloud_ayahs = {
-            int(ayah["number"]): ayah
-            for surah in data["cloud_surahs"]
-            for ayah in surah["ayahs"]
-        }
-        for row in connection.execute(
-            "SELECT id, surah, ayah, page, juz, hizb_quarter, text_uthmani, text_simple, text_norm "
-            "FROM ayah ORDER BY id"
-        ):
-            key = (int(row["surah"]), int(row["ayah"]))
-            _require(row["text_uthmani"] == tanzil_uthmani[key], f"Uthmani text changed at {key}")
-            _require(row["text_simple"] == tanzil_simple[key], f"Simple text changed at {key}")
-            _require(row["text_norm"] == normalize_ar(row["text_simple"]), f"Search normalization mismatch at {key}")
-            cloud = cloud_ayahs[int(row["id"])]
-            _require(int(row["page"]) == int(cloud["page"]), f"AlQuran.cloud page mismatch at {key}")
-            _require(int(row["juz"]) == int(cloud["juz"]), f"AlQuran.cloud juz mismatch at {key}")
-            _require(
-                int(row["hizb_quarter"]) == int(cloud["hizbQuarter"]),
-                f"AlQuran.cloud hizb-quarter mismatch at {key}",
-            )
-        passed.append("Display texts are byte-identical to Tanzil sources; metadata matches AlQuran.cloud")
-
-        spot_checks = {
-            (2, 255): (42, 3),
-            (1, 1): (1, 1),
-            (114, 6): (604, 30),
-            (18, 1): (293, 15),
-        }
-        for (surah, ayah), expected in spot_checks.items():
-            result = connection.execute(
-                "SELECT page, juz FROM ayah WHERE surah=? AND ayah=?", (surah, ayah)
+        uthmani = _verses(sources["uthmani"], "QUL Uthmani")
+        imlaei = _verses(sources["imlaei_simple"], "QUL Imlaei Simple")
+        translation = {str(row["ayah_key"]): str(row["text"])
+                       for row in sources["translation_id"].execute("SELECT ayah_key,text FROM translation")}
+        first_page, page_members = _page_mapping(sources["layout_1405h"], sources["word_glyphs_1405h"])
+        juz, _ = _map_parts(sources["juz_metadata"], "juz", "juz_number")
+        hizb, _ = _map_parts(sources["hizb_metadata"], "hizbs", "hizb_number")
+        sajda = {str(row[0]) for row in sources["sajda_metadata"].execute("SELECT verse_key FROM sajdah")}
+        require(set(uthmani) == set(imlaei) == set(translation) == set(first_page) == set(juz) == set(hizb),
+                "QUL source key sets differ")
+        require(len(sajda) == 15, "Sajda count differs")
+        for row in db.execute("SELECT * FROM ayah ORDER BY id"):
+            key = f'{row["surah"]}:{row["ayah"]}'
+            require(key in uthmani, f"Unexpected ayah {key}")
+            require(row["id"] == uthmani[key][0] == imlaei[key][0], f"ID mismatch at {key}")
+            require(row["text_uthmani"] == uthmani[key][1], f"Uthmani changed at {key}")
+            require(row["text_simple"] == imlaei[key][1], f"Imlaei changed at {key}")
+            require(row["translation_id"] == translation[key], f"Indonesian translation changed at {key}")
+            require(row["text_norm"] == normalize_ar(imlaei[key][1]), f"Normalization changed at {key}")
+            require((row["page"], row["juz"], row["hizb"], row["sajda"]) ==
+                    (first_page[key], juz[key], hizb[key], int(key in sajda)),
+                    f"QUL location metadata mismatch at {key}")
+        for page in range(1, 605):
+            ids = sorted(uthmani[key][0] for key in page_members[page])
+            actual = db.execute("SELECT first_ayah,last_ayah FROM page WHERE number=?", (page,)).fetchone()
+            require(actual is not None and tuple(actual) == (ids[0], ids[-1]),
+                    f"1405H page boundaries differ at {page}")
+        require(db.execute("SELECT page,juz FROM ayah WHERE surah=2 AND ayah=255").fetchone()[:] == (42, 3),
+                "2:255 spot check failed")
+        require(db.execute("SELECT COUNT(*) FROM ayah_fts WHERE ayah_fts MATCH 'الحمد'").fetchone()[0] > 0,
+                "Arabic FTS query failed")
+        passed.append("Every ayah matches QUL text, translation, page, juz, hizb, and sajda")
+        passed.append("All 604 page boundaries and Arabic FTS are valid")
+        print_counts = {name: db.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
+                        for name in ("mushaf_edition", "mushaf_asset", "mushaf_page",
+                                     "mushaf_line", "mushaf_word", "mushaf_ayah_page")}
+        require(print_counts["mushaf_edition"] == 1 and print_counts["mushaf_asset"] == 722 and
+                print_counts["mushaf_page"] == 604 and
+                print_counts["mushaf_line"] == sources["layout_1405h"].execute(
+                    "SELECT COUNT(*) FROM pages").fetchone()[0] and
+                print_counts["mushaf_word"] == 83668 and
+                print_counts["mushaf_ayah_page"] >= EXPECTED_AYAT,
+                f"Incomplete v3 print tables: {print_counts}")
+        edition = db.execute("SELECT * FROM mushaf_edition").fetchone()
+        require(edition["id"] == EDITION and edition["pack_version"] == 3 and
+                edition["page_count"] == 604 and edition["manifest_sha256"] == manifest_digest and
+                (edition["design_width"], edition["word_font_size"]) == (660.0, 42.0),
+                "Invalid print edition profile")
+        asset_rows = [tuple(row) for row in db.execute(
+            "SELECT edition_id,id,kind,page,path,sha256,byte_size,source_name,rights_status "
+            "FROM mushaf_asset ORDER BY kind,id"
+        )]
+        require(sorted(asset_rows) == sorted(assets), "DB asset records differ from verified local pack")
+        require(manifest["edition"] == EDITION, "Local pack edition differs")
+        source_words = {int(row["id"]): row for row in sources["word_glyphs_1405h"].execute(
+            "SELECT id,location,surah,ayah,word,text FROM words"
+        )}
+        seen_words: set[int] = set()
+        seen_ayat: set[int] = set()
+        for page in range(1, 605):
+            source_lines = list(sources["layout_1405h"].execute(
+                "SELECT line_number,line_type,is_centered,first_word_id,last_word_id,surah_number "
+                "FROM pages WHERE page_number=? ORDER BY line_number", (page,)
+            ))
+            page_row = db.execute("SELECT line_count,font_asset_id FROM mushaf_page "
+                                  "WHERE edition_id=? AND page=?", (EDITION, page)).fetchone()
+            require(page_row is not None and tuple(page_row) ==
+                    (len(source_lines), f"font:p{page}.ttf"), f"Invalid print page {page}")
+            lines = list(db.execute("SELECT * FROM mushaf_line WHERE edition_id=? AND page=? ORDER BY line",
+                                    (EDITION, page)))
+            require(len(lines) == len(source_lines), f"Print line count differs on page {page}")
+            for source, actual in zip(source_lines, lines, strict=True):
+                first = int(source["first_word_id"]) if source["line_type"] == "ayah" else None
+                last = int(source["last_word_id"]) if source["line_type"] == "ayah" else None
+                surah = int(source["surah_number"]) if source["surah_number"] not in (None, "") else None
+                require((actual["line"], actual["kind"], actual["centered"], actual["surah"],
+                         actual["first_word_id"], actual["last_word_id"]) ==
+                        (source["line_number"], source["line_type"], source["is_centered"],
+                         surah, first, last), f"Print line differs at {page}:{actual['line']}")
+                word_rows = list(db.execute(
+                    "SELECT id,ayah_id,word_key,glyph,position FROM mushaf_word "
+                    "WHERE edition_id=? AND page=? AND line=? ORDER BY position",
+                    (EDITION, page, actual["line"]),
+                ))
+                require(len(word_rows) == (last - first + 1 if first is not None else 0),
+                        f"Print word count differs at {page}:{actual['line']}")
+                for position, row in enumerate(word_rows, start=1):
+                    source_word = source_words[row["id"]]
+                    key = f'{source_word["surah"]}:{source_word["ayah"]}'
+                    require(row["id"] == first + position - 1 and
+                            (row["ayah_id"], row["word_key"], row["glyph"], row["position"]) ==
+                            (uthmani[key][0], source_word["location"], source_word["text"], position),
+                            f"Print word differs at {page}:{actual['line']}:{position}")
+                    seen_words.add(row["id"])
+                    seen_ayat.add(row["ayah_id"])
+        require(len(seen_words) == 83668 and len(seen_ayat) == EXPECTED_AYAT,
+                "Print word or canonical ayah coverage differs")
+        segment_rows = list(db.execute(
+            "SELECT ayah_id,page,first_line,last_line,first_word_id,last_word_id "
+            "FROM mushaf_ayah_page WHERE edition_id=? ORDER BY ayah_id,page", (EDITION,)
+        ))
+        require(len(segment_rows) == print_counts["mushaf_ayah_page"], "Missing ayah page segments")
+        for segment in segment_rows:
+            actual = db.execute(
+                "SELECT MIN(line),MAX(line),MIN(id),MAX(id) FROM mushaf_word "
+                "WHERE edition_id=? AND ayah_id=? AND page=?",
+                (EDITION, segment["ayah_id"], segment["page"]),
             ).fetchone()
-            _require(result is not None and tuple(result) == expected, f"Spot check failed: {surah}:{ayah}")
-        page_42 = connection.execute("SELECT first_ayah, last_ayah FROM page WHERE number=42").fetchone()
-        _require(page_42 is not None, "Missing page 42 boundary")
-        _require(
-            connection.execute("SELECT COUNT(*) FROM ayah_fts WHERE ayah_fts MATCH 'الحمد'").fetchone()[0] > 0,
-            "FTS index did not return an expected Arabic search term",
-        )
-        passed.append("Madani page, juz, spot checks, and Arabic FTS search are valid")
+            require(tuple(segment)[2:] == tuple(actual),
+                    f"Incorrect ayah page segment {segment['ayah_id']}:{segment['page']}")
+        passed.append("All QUL print lines, words, ayah segments, and 722 asset hashes match")
+        return passed
     finally:
-        connection.close()
-
-    size = OUTPUT.stat().st_size
-    _require(size <= 25 * 1024 * 1024, f"Database exceeds the 25 MiB target: {size:,} bytes")
-    passed.append(f"Database size is within the 25 MiB target ({size:,} bytes)")
-    return passed
+        db.close()
+        for source in sources.values():
+            source.close()
 
 
 def main() -> None:
     try:
         for item in verify():
             print(f"PASS  {item}")
-    except (BuildError, OSError, sqlite3.Error, KeyError, ValueError) as error:
-        raise SystemExit(f"Database verification failed: {error}") from error
+    except (BuildError, OSError, sqlite3.Error, ValueError, KeyError) as error:
+        raise SystemExit(f"QUL database verification failed: {error}") from error
 
 
 if __name__ == "__main__":

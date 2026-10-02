@@ -1,0 +1,71 @@
+-- Mirror of docs/06-DATA-MODEL.md §2.
+CREATE TABLE bookmark (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ayah_id INTEGER NOT NULL,
+  folder TEXT NOT NULL DEFAULT 'default',
+  note TEXT,
+  color TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (ayah_id, folder)
+);
+
+CREATE TABLE reading_position (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  ayah_id INTEGER NOT NULL,
+  page INTEGER NOT NULL,
+  mode TEXT NOT NULL CHECK (mode IN ('mushaf','list')),
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE khatam_plan (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at TEXT NOT NULL,
+  target_days INTEGER NOT NULL,
+  pages_read_json TEXT NOT NULL DEFAULT '[]',
+  completed_at TEXT
+);
+
+CREATE TABLE voice_search_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  best_key TEXT,
+  confidence REAL,
+  transcript TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE prayer_cache (
+  location_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  source TEXT NOT NULL,
+  times_json TEXT NOT NULL,
+  fetched_at TEXT NOT NULL,
+  PRIMARY KEY (location_id, date)
+);
+
+CREATE TABLE adzan_setting (
+  prayer TEXT PRIMARY KEY CHECK (prayer IN ('imsak','subuh','terbit','dhuha','dzuhur','ashar','maghrib','isya')),
+  enabled INTEGER NOT NULL DEFAULT 1,
+  sound TEXT NOT NULL DEFAULT 'adzan_makkah',
+  pre_minutes INTEGER NOT NULL DEFAULT 0,
+  offset_minutes INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE audio_download (
+  reciter_id TEXT NOT NULL,
+  surah INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  bytes INTEGER,
+  downloaded_at TEXT NOT NULL,
+  PRIMARY KEY (reciter_id, surah)
+);
+
+CREATE TABLE tasbih_counter (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  label TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  target INTEGER,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE kv_setting ("key" TEXT PRIMARY KEY, value TEXT NOT NULL);

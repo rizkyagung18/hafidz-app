@@ -1,7 +1,10 @@
 # 04 — External API & Data Catalog
 
-All endpoints below were checked against official docs and/or live requests on 2026-09-28.
-Free community APIs have **no SLA** — every provider must have a fallback (§9) and responses must be cached in the BFF.
+**Current Qur'an-source decision:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) supersedes the historical provider catalog below for Qur'an content. Only pinned QUL sources may feed the new database, fonts, and future Murattal. Tanzil, EQuran, AlQuran.cloud, and Quran Foundation are not fallback content providers. Non-Qur'an daily-needs providers and the independent Tarteel ASR model remain in scope.
+
+API endpoints below were checked against official docs and/or live requests on 2026-09-28.
+The QUL resource documentation in §13 was checked on 2026-09-30; its downloadable artifacts have not yet been audited.
+Free community APIs have **no SLA** — every runtime provider must have a fallback (§11) and responses must be cached in the BFF.
 
 Legend — **Auth:** none / key / OAuth2. **Used by:** `APP` = mobile calls directly, `BFF` = backend proxy only.
 
@@ -20,6 +23,7 @@ Legend — **Auth:** none / key / OAuth2. **Used by:** `APP` = mobile calls dire
 | 9 | fawazahmed0/hadith-api (jsDelivr) | Hadith editions incl. Indonesian (`ind-*`) | none | BFF | Hadith fallback |
 | 10 | Tanzil | Verified Qur'an text files (Uthmani, Simple Clean) | none (download) | build tools | Bundled offline text |
 | 11 | Hugging Face Hub | `tarteel-ai/whisper-base-ar-quran` weights | none (public) | build tools | ASR model |
+| 12 | QUL (Tarteel) | KFGQPC V1 1405H layout, word glyphs, page fonts | Download workflow; no public resource API | build tools (planned) | Faithful Mushaf presentation; see §13 |
 
 ---
 
@@ -242,3 +246,38 @@ class ProviderClient(Protocol):
 
 Be a good citizen: identify via `User-Agent`, respect cache headers, never hammer free APIs from app clients
 directly (all traffic goes through the BFF cache, except static audio CDNs).
+
+## 13. QUL — Madinah 1405H Mushaf resources (planned)
+
+Status: source documentation reviewed; downloads, import, native rendering and validation are **planned**.
+See the [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
+[ADR-006](adr/ADR-006-madinah-1405h-mushaf.md). QUL provides downloadable resources for packaging with a project;
+it currently has [no public resource API](https://qul.tarteel.ai/resources). Reading must use local verified assets.
+
+The selected resources are the compatible trio linked by the official layout page:
+
+- [Layout 15 — KFGQPC V1 layout (1405H print)](https://qul.tarteel.ai/resources/mushaf-layout/15):
+  604 pages, nominally 15 lines; SQLite and DOCX offered. Its documented `pages` rows describe
+  `page_number`, `line_number`, `line_type`, `is_centered`, `first_word_id`, `last_word_id`, and `surah_number`.
+  Preserve source-driven opening-page exceptions rather than forcing 15 occupied rows everywhere.
+- [Script 57 — QPC V1 Glyphs, Word by Word](https://qul.tarteel.ai/resources/quran-script/57):
+  SQLite and JSON offered. Layout help describes a `words` table joined by `word_index`, with canonical surah/ayah
+  references and glyph text. Inspect the actual export schema, word identifiers and ayah end-marker records before import.
+- [Font 238 — QPC V1 Font](https://qul.tarteel.ai/resources/font/238): page fonts offered in TTF, WOFF and WOFF2.
+  Evaluate TTF for the native Flutter renderer; confirm every page's font association from the downloaded package.
+
+The proposed renderer uses the prescribed line membership and alignment with matching V1 glyphs/fonts.
+Pressable ayah regions will be measured from the rendered glyphs and grouped by canonical ayah; the same geometry
+will drive highlight overlays. This is an application design choice, not a claim that QUL supplies bounding boxes.
+No edition-matched complete page-image pack or pixel-coordinate dataset has been verified. Do not substitute
+unverified images, V2 fonts, generic Unicode rendering, or freely wrapped paragraphs for this edition.
+The [official layout tutorial](https://qul.tarteel.ai/docs/tutorial-mushaf-layout-end-to-end) explains the line/word joins.
+
+Before implementation, record exact download URLs, artifact versions or retrieval dates, SHA-256 hashes,
+actual schemas, font coverage and compressed/uncompressed sizes. Keep QUL presentation identifiers separate from
+the application's stable `surah:ayah` and global ayah IDs. Canonical Tanzil text remains the source for list mode,
+copy/share, accessibility text and search; glyph codes are presentation data only.
+
+Resource-specific licensing evidence is unresolved. The [QUL FAQ](https://qul.tarteel.ai/faq) states that terms vary
+by resource. Pin the applicable license and attribution evidence for all three resources before redistribution;
+QUL's CMS software license does not establish rights to its font/content downloads. See docs/10 §4.1.

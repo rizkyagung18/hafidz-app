@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source": "QUL decorative print fonts and ligatures",
+  "sources": {
+    "surah_header_font": {"path": ".cache/qul-migration/QCF_SurahHeader_COLOR-Regular.ttf.zip", "sha256": "124cda8df1ffc72103df1eb9d6940cbc8eb88767c53aec9739611d6f0a2e4b8f"},
+    "surah_name_v2_font": {"path": ".cache/qul-migration/surah-name-v2.ttf.zip", "sha256": "719cca6c335e13d9b7801515688c76ff63d0923ede97f22064300f00ae6d92cd"},
+    "quran_common_font": {"path": ".cache/qul-migration/quran-common.ttf.zip", "sha256": "ac2bf22fa11f3ca5500ed173f57f220e91310d13e7304b275f61c9548d0cab67"},
+    "surah_header_ligatures": {"path": ".cache/qul-1405h/surah_header_ligatures.json", "sha256": "84a14faa85620473fbd7b00a2a5433cf89948f826551c6cfb6fb1c88c4ffc829"},
+    "surah_name_v1_font": {"path": ".cache/qul-1405h/surah_name_v1.ttf", "sha256": "24928ce6a9be4c534ccdcaca7e68e6b9402b5188a9ad201baa3539cf6ca5c7ca"}
+  }
+}

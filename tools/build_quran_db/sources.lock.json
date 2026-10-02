@@ -1,31 +1,19 @@
 {
-  "schema_version": 1,
-  "snapshot_date": "2026-09-28",
-  "tanzil_text_version": "1.1",
+  "schema_version": 2,
+  "snapshot_date": "2026-10-01",
+  "source": "QUL (qul.tarteel.ai)",
   "sources": {
-    "tanzil_uthmani": {
-      "url": "https://tanzil.net/pub/download/index.php?quranType=uthmani&outType=txt-2&agree=true&marks=true&sajdah=true&rub=true&tatweel=true",
-      "sha256": "7f30c647331a61100ebf24a80507dc0fcdd9f2df97f1312b5b2dfcb982a7f326"
-    },
-    "tanzil_simple_clean": {
-      "url": "https://tanzil.net/pub/download/index.php?quranType=simple-clean&outType=txt-2&agree=true&marks=false&sajdah=false&rub=false&tatweel=false",
-      "sha256": "1862ee63c70fbfc6285e0bb0b9587b89beb5b7891109a4d543d9d2cf8283e8c8"
-    },
-    "tanzil_metadata": {
-      "url": "https://tanzil.net/res/text/metadata/quran-data.xml",
-      "sha256": "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a"
-    },
-    "alquran_cloud": {
-      "url": "https://api.alquran.cloud/v1/quran/quran-uthmani",
-      "sha256": "0df03e1d6da4fc8138208fec1688f2b416f0dd4ebbd514179f3e5e0fbaf4195f"
-    },
-    "equran_details": {
-      "url": "https://equran.id/api/v2/surat/{surah}",
-      "sha256": "5cf8f077b6122322c0d920c65ddfcd92f4ca9d9c2f028d3e6b982327aa2ccc1e"
-    },
-    "equran_tafsir": {
-      "url": "https://equran.id/api/v2/tafsir/{surah}",
-      "sha256": "8af8f5dd5481adc7641186143a7a5be34b9c5e39954f466b89cce3cf9e7c4894"
-    }
+    "uthmani": {"path": ".cache/qul-migration/uthmani.db.zip", "sha256": "b3fe3dbf31a1a5e932a5252d191f685fc2508c2ac73b201468b4342537beb838"},
+    "imlaei_simple": {"path": ".cache/qul-migration/imlaei-simple.db.zip", "sha256": "261895c376cdeea5777c8328729d4aacd4ccc487b758cfdc469dba218ca763ff"},
+    "translation_id": {"path": ".cache/qul-migration/quran-id-simple.db.zip", "sha256": "55ad4a1bfda6c648966c64faa5f133b75a89a08f49af329ab1d81dc21ef9f65d"},
+    "ayah_metadata": {"path": ".cache/qul-migration/quran-metadata-ayah.sqlite.zip", "sha256": "cbe824efb65136ac558c67e76fdbfcb3e2c2ad1d506fceece5e3dbef68f0e99e"},
+    "surah_metadata": {"path": ".cache/qul-migration/quran-metadata-surah-name.sqlite.zip", "sha256": "067e108eaf97283ccf56fc23d866024e7da48bc19a84b58ce5e60bfce7665a6e"},
+    "juz_metadata": {"path": ".cache/qul-migration/quran-metadata-juz.sqlite.zip", "sha256": "32412ac4395b3a7dbca4d32ecf0d87c2d51a9feb8e83204a976bc994bb4b3ea9"},
+    "hizb_metadata": {"path": ".cache/qul-migration/quran-metadata-hizb.sqlite.zip", "sha256": "890c3aecccd8840d2d7724975157eefe1a12d8e8c790b933dc84bea43c00a601"},
+    "sajda_metadata": {"path": ".cache/qul-migration/quran-metadata-sajda.sqlite.zip", "sha256": "88494739b12a246077c0369ec5b00bf2460a1df30ceb97fe6aca107480afd86d"},
+    "layout_1405h": {"path": ".cache/qul-1405h/qpc-v1-15-lines.db.zip", "sha256": "fb04bdfb0da38925853bc0ccdecd08b1536ac74fb1c8e9ff27a9af7ad7a452f9"},
+    "word_glyphs_1405h": {"path": ".cache/qul-1405h/qpc-v1-glyph-codes-wbw.db.zip", "sha256": "c1f6e74ba4272b2573f7bbbb949c73d0eab257ff74183d783fd81581204aef1a"},
+    "me_quran_font": {"path": ".cache/qul-migration/me_quran_volt_newmet.ttf.zip", "sha256": "ce23f16dc53d6e034b2652069be4ddfccdab9a81fb649bf0bf9d1d61d6797026"},
+    "page_fonts_1405h": {"path": ".cache/qul-1405h/QPC-V1-Font.ttf.bz2", "sha256": "b276e07b6e7c8df255c0a61fa9ae7f0d02fde074eec4e04c13fec75cf72e0031"}
   }
 }

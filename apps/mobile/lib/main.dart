@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hafidz_app/app.dart';
+import 'package:hafidz_app/core/database/local_databases.dart';
+import 'package:hafidz_app/core/persistence/persistence_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const HafidzApp());
-}
-
-class HafidzApp extends StatelessWidget {
-  const HafidzApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Hafidz App',
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal)),
-      home: const Scaffold(
-        body: Center(child: Text('Hafidz App project scaffold')),
-      ),
-    );
-  }
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final databases = await openLocalDatabases();
+  runApp(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        localDatabasesProvider.overrideWithValue(databases),
+      ],
+      child: const HafidzApp(),
+    ),
+  );
 }

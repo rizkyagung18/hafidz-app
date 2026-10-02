@@ -21,4 +21,11 @@ jobs:
       - working-directory: apps/mobile
         run: flutter pub get
       - working-directory: apps/mobile
-        run: flutter analyze
+        run: dart run build_runner build
+      - working-directory: apps/mobile
+        run: dart analyze lib
+      - working-directory: apps/mobile
+        run: dart analyze test
+      # Flutter test bundles assets declared in pubspec.yaml, including the
+      # local QUL database and fonts. Run the full suite on developer machines
+      # until those assets can be distributed to CI.

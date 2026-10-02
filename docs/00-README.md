@@ -6,6 +6,12 @@ hadith) with an AI **Voice Ayah Finder** powered by `tarteel-ai/whisper-base-ar-
 Designed to be embedded in the source repository so coding agents (Codex, etc.) can implement it task by task.
 Start with [`/AGENTS.md`](../AGENTS.md).
 
+**Current design revision (2026-09-30):** the T-M04 flowing-text prototype does not meet the required Mushaf
+appearance. The target is **Madinah 1405H / KFGQPC V1 with pressable ayat**. Read the
+[redesign plan](11-MUSHAF-1405H-REDESIGN.md) and [ADR-006](adr/ADR-006-madinah-1405h-mushaf.md) before continuing
+Mushaf work. Source audit and visual proof precede the database rebuild. Local audit/proof tools exist; the app
+reader still uses the earlier flowing-text prototype.
+
 ## How to use with Codex
 
 1. Copy `AGENTS.md` to the repository root and `docs/` to `/docs`.
@@ -29,14 +35,15 @@ Start with [`/AGENTS.md`](../AGENTS.md).
 | 08 | [Roadmap & Tasks](08-ROADMAP-TASKS.md) |
 | 09 | [Testing & QA](09-TESTING-QA.md) |
 | 10 | [Security, Privacy & Licensing](10-SECURITY-PRIVACY-LICENSING.md) |
-| ADR | [001 Flutter](adr/ADR-001-flutter-mobile.md) · [002 faster-whisper](adr/ADR-002-faster-whisper-server-asr.md) · [003 Matcher](adr/ADR-003-deterministic-ayah-matcher.md) · [004 Offline DB](adr/ADR-004-bundled-offline-quran-db.md) · [005 Prayer sources](adr/ADR-005-prayer-times-sources.md) |
+| 11 | [Madinah 1405H Mushaf Redesign](11-MUSHAF-1405H-REDESIGN.md) |
+| ADR | [001 Flutter](adr/ADR-001-flutter-mobile.md) · [002 faster-whisper](adr/ADR-002-faster-whisper-server-asr.md) · [003 Matcher](adr/ADR-003-deterministic-ayah-matcher.md) · [004 Offline DB](adr/ADR-004-bundled-offline-quran-db.md) · [005 Prayer sources](adr/ADR-005-prayer-times-sources.md) · [006 Madinah 1405H Mushaf](adr/ADR-006-madinah-1405h-mushaf.md) |
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
 | Ayah key | `surah:ayah`, e.g. `2:255` (Ayat Kursi) |
-| Madani page | Page in the standard 604-page Madinah Mushaf |
+| Madani page | Edition-specific page number; the target reader uses the 604-page Madinah 1405H / KFGQPC V1 print. Legacy API/DB metadata is retained separately. |
 | Juz / Hizb | 30 equal parts / 60 halves-of-juz (240 quarters) |
 | Murottal | Recited Qur'an audio |
 | Muqatta'at | Disjointed letters opening some surahs (الم, حم, …) |

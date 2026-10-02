@@ -1,5 +1,7 @@
 # 03 — AI Voice Ayah Detection (ASR + Ayah Matching)
 
+**Current migration contract:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) replaces the legacy Qur'an-source table below. The matcher index is rebuilt only from QUL Uthmani and Imlaei Simple. Live follow uses a distinct WebSocket contract; the one-shot endpoint remains for shared files. Live accuracy is unmeasured while the streaming golden set is empty.
+
 This is the core AI feature. It has two stages:
 
 1. **ASR** — speech → Arabic text using `tarteel-ai/whisper-base-ar-quran`.
@@ -137,11 +139,11 @@ Built offline by `tools/build_quran_db` and loaded into memory by the BFF (and l
 
 | Field | Source |
 |---|---|
-| Display Arabic (Uthmani Hafs) | Tanzil Uthmani text (CC BY 3.0, verbatim) or Quran Foundation `text_uthmani` |
-| Search text variant A | Tanzil **Uthmani** → normalized (§4) |
-| Search text variant B | Tanzil **Simple Clean** (imla'i spelling) → normalized (§4) — closer to what ASR emits, e.g. `العالمين` vs Uthmani `ٱلۡعَـٰلَمِينَ` |
-| page (Madani 604), juz, hizb, rub, ruku, manzil, sajda | alquran.cloud `/v1/quran/quran-uthmani` (fields `page`, `juz`, `hizbQuarter`, …) or Quran Foundation verses (`page_number`, `juz_number`) — cross-check both at build time |
-| Indonesian translation, tafsir, Latin | equran.id v2 (Kemenag) |
+| Display Arabic (Uthmani Hafs) | Pinned QUL Uthmani, byte-identical |
+| Search text variant A | QUL Uthmani → normalized (§4) |
+| Search text variant B | QUL Imlaei Simple → normalized (§4) |
+| page (1405H 604), juz, hizb, sajda | Pinned QUL layout/word and metadata exports; Rub, Ruku and Manzil deferred |
+| Indonesian ayah translation | Pinned QUL Indonesian translation export; tafsir and Latin deferred |
 
 ### 3.2 Units
 

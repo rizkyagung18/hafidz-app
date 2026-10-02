@@ -1,5 +1,7 @@
 # 07 — Mobile App Design (Flutter)
 
+**Current target:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) supersedes the old five-tab, Home microphone, Latin/tafsir, and one-shot-only UI descriptions below. The next shell has four tabs, opens on the Surah list, and places one live Voice Finder FAB outside the printed Mushaf page.
+
 ## 1. Information architecture
 
 Bottom navigation (5 tabs):
@@ -17,80 +19,103 @@ Bottom navigation (5 tabs):
 | Route | Screen | Notes |
 |---|---|---|
 | `/quran/surah/:n?ayah=:a` | List reader | Scrolls to ayah |
-| `/quran/page/:p?ayah=:s::a[-:b]&hl=1` | Mushaf reader | `hl=1` → highlight animation (Voice Ayah Finder target) |
-| `/quran/ayah/:key` | Resolves to page route via DB (`key` = `2:255`) | Used by share links |
+| `/quran/page/:p?ayah=:s::a[-:b]&hl=1` | Mushaf reader | Planned 1405H edition page; canonical ayah target takes precedence over stale page metadata; `hl=1` pulses it |
+| `/quran/ayah/:key` | Resolves to page route via local edition mapping (`key` = `2:255`) | Used by share links; 1405H resolution planned in T-M04-R5 |
 | `/voice` | Voice Ayah Finder (full-screen modal) | |
 | `/voice/result` | Candidate picker (bottom sheet route) | |
 | `/prayer/month` , `/prayer/settings` , `/prayer/location` | | |
 | `/doa` , `/doa/:id` , `/hadith` , `/hadith/:book` , `/hadith/:book/:n` , `/asmaul-husna` , `/tasbih` , `/hijri` , `/settings` , `/about` | | |
 
-External deep links: scheme `hafidz://` and App Links / Universal Links `https://example.com/q/2:255` (replace with the owned app domain before release).
+External deep links use the registered `hafidz` scheme, for example `hafidz://quran/ayah/2:255`. App Links / Universal Links use `https://example.com/q/2:255` as a placeholder until an owned app domain is configured.
 Android intent filter for `ACTION_SEND` `audio/*` → `/voice?shared=1` (US-01.2).
 
-## 3. Voice Ayah Finder — UX flow & states
+The route shapes remain stable through the [1405H redesign](11-MUSHAF-1405H-REDESIGN.md).
+The current prototype resolves through legacy DB page metadata. Its replacement will resolve canonical ayah
+targets through the local 1405H edition mapping; page-only links refer to that selected print. Server `page`
+values remain legacy metadata and must not override the edition's local ayah lookup.
 
-```mermaid
-stateDiagram-v2
-  [*] --> Idle
-  Idle --> PermissionRationale: tap mic (first time)
-  PermissionRationale --> Idle: denied
-  PermissionRationale --> Recording: granted
-  Idle --> Recording: tap mic
-  Recording --> Uploading: auto-stop (2 s silence) / tap stop / 30 s
-  Recording --> Idle: cancel or < 2 s audio
-  Uploading --> Processing
-  Processing --> AutoNavigate: conf ≥ auto & margin ≥ min & !ambiguous
-  Processing --> CandidatePicker: min ≤ conf < auto or ambiguous
-  Processing --> NotFound: conf < min
-  Processing --> Error: network / 5xx / 4xx
-  AutoNavigate --> [*]
-  CandidatePicker --> AutoNavigate: pick
-  NotFound --> Recording: "Coba lagi"
-  Error --> Recording: retry
-```
+## 3. Voice Ayah Finder — current live flow
 
-Screen specs:
+The Mushaf's sole floating mic button starts a WebSocket session after
+microphone permission and a server `ready` event. A compact status control
+outside the print area shows connecting, listening, searching, paused follow,
+or a recoverable error. There is no recording overlay or audio file for the
+live path. The existing `/voice` and `/voice/result` routes remain for the
+later shared-file task T-M06.
 
-| State | UI |
-|---|---|
-| Recording | Full-screen dark overlay, pulsing mic, live waveform (amplitude stream from `record`), timer `00:07 / 00:30`, hint text "Bacakan ayat dengan jelas (5–15 detik)", buttons: Batal / Selesai |
-| Processing | Shimmer + "Mencari ayat…", cancel button; show progress steps (Mengunggah → Mengenali → Mencocokkan) |
-| AutoNavigate | Close overlay → Mushaf page; highlighted ayah with 4 s pulse (primary color 20 % opacity), snackbar "QS Al-Baqarah: 255 · Juz 3 · Hal. 42" with actions **Putar** (play murottal from that ayah) and **Bukan ini?** (opens candidate picker) |
-| CandidatePicker | Bottom sheet: title "Mungkin maksud Anda:"; up to 3 cards: surah Latin + number, ayah range, Arabic snippet (first 8 words, RTL), translation snippet, score bar; "Rekam ulang" button; if `reason == identical_ayat` show note "Ayat ini diulang di beberapa tempat" |
-| NotFound | Illustration, "Ayat tidak ditemukan", tips list, "Coba lagi" |
-| Transcript | Collapsible "Yang terdengar:" with ASR text (RTL) in all result states |
-
-Provider wiring (Riverpod):
-
-```dart
-final voiceControllerProvider = NotifierProvider.autoDispose<VoiceController, VoiceState>(VoiceController.new);
-
-sealed class VoiceState { const VoiceState(); }
-class VoiceIdle extends VoiceState { const VoiceIdle(); }
-class VoiceRecording extends VoiceState { final Duration elapsed; final double amplitude; const VoiceRecording(this.elapsed, this.amplitude); }
-class VoiceProcessing extends VoiceState { final VoiceStep step; const VoiceProcessing(this.step); }
-class VoiceResult extends VoiceState { final VoiceDetectResult result; final VoiceDecision decision; const VoiceResult(this.result, this.decision); }
-class VoiceFailure extends VoiceState { final AppError error; const VoiceFailure(this.error); }
-```
-
-`VoiceController`:
-1. `start()` → check/request mic permission → `AudioRecorder.start(RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1))`.
-2. Listen `onAmplitudeChanged(Duration(milliseconds: 100))` → VAD (silence when `current < -45 dBFS` for 2 s after ≥ 2 s speech).
-3. `stop()` → file path → `VoiceRepository.detect(file, hintSurah)` → `decide()` → emit `VoiceResult`.
-4. `finally` delete temp file.
-5. On `autoNavigate`: `context.go('/quran/page/${m.page}?ayah=${m.range.key}&hl=1')`, insert history row.
+The app streams 16 kHz mono PCM16LE in half-second frames. It follows only
+new stable `ayah` revisions with increasing sequence numbers; `candidate`
+and `ambiguous` keep the current highlight. It validates the canonical ayah
+range, resolves the end ayah's page from the installed QUL edition, and
+highlights the full range. Pause follow leaves the mic active and remembers
+the latest stable ayah; resume catches up immediately. Stop, screen disposal,
+server error, or connection loss stops capture. Errors offer Retry, while
+permission denial explains how to grant microphone access. See [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md)
+and [docs/05 §2.1a](05-BACKEND-API-SPEC.md) for transport and event fields.
 
 ## 4. Qur'an reader
 
-- **Mushaf mode:** `PageView` reversed (RTL), 604 pages. Rendering options:
-  - v1: text-based page layout from DB (`page` → ayat) with Uthmani font (KFGQPC HAFS / Amiri Quran), justified RTL,
-    ayah end markers `۝` with Arabic-Indic numerals, surah header + basmala blocks.
-  - v2: glyph-accurate Madani layout using Quran Foundation V1/V2 glyph codes + per-page QCF fonts (downloaded on demand).
-- **Highlight API:** `ReaderController.highlight(AyahRange range, {Duration pulse = 4s})` — used by voice, audio
-  follow-along, and search.
-- **List mode:** `ScrollablePositionedList` per surah; each item: Arabic (RTL), Latin (toggle), translation (toggle),
-  actions (play, bookmark, share, copy, tafsir).
-- Long-press ayah → action sheet. Auto-save reading position on page change (debounced 1 s).
+### 4.1 Mushaf status and target
+
+The existing T-M04 prototype renders verbatim ayat as flowing Amiri Quran text grouped by page. It supports
+navigation and highlight, but its printed appearance is **not accepted**. The following replacement is planned
+under T-M04-R1–R5; no new renderer, QUL assets or database migration is implemented by this documentation revision.
+The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
+[ADR-006](adr/ADR-006-madinah-1405h-mushaf.md) replace the previous v1/v2 rendering choices.
+
+- **Print source:** use QUL layout 15 (KFGQPC V1, Madinah 1405H) with matching word glyphs 57 and page fonts 238.
+  Use the source's ordered line membership, alignment, headings and basmallah rows. Ordinary pages have the
+  15-line layout; opening pages and other special rows follow the source instead of a fixed row-count assumption.
+  Preserve the numbered Al-Fatihah basmala, separate unnumbered basmallahs and source end markers without duplication.
+- **Fixed page:** render glyphs in a fixed page coordinate system, retaining the print's word positions, page
+  proportions and prescribed lines. Fit the complete page by default. Pinch zoom and pan enlarge the same page;
+  text scaling must not wrap words onto new lines. Missing page fonts produce an asset error, not Amiri fallback.
+- **Current local proof on tall phones:** use the available page height as extra leading between the 15 prescribed
+  lines, keeping their order, glyph aspect ratio and horizontal shaping intact. Keep the eight-line opening pages
+  compact until their decorative frame and final reference geometry are approved. Size the QPC word glyphs to
+  use the line width with natural inter-word spacing; do not insert large equal gaps between undersized words.
+- **Paging and jumps:** retain a reversed RTL `PageView` for 604 pages; swipe right to advance at default zoom.
+  When zoomed, panning takes precedence over paging; resetting zoom returns to page fit. Page/juz/surah/ayah jumps
+  use the bundled edition mapping. Tapping the top Surah or Juz pill opens a selectable list of all 114 Surahs or
+  30 Juz; the bottom page control opens the full jump sheet and holds the circular Voice Finder mic outside the
+  printed page. Voice, search, bookmarks and ayah deep links resolve
+  canonical ayat locally.
+- **Offline package:** plan to ship the complete licensed layout, glyph data and matching page fonts for reading
+  after installation with no network. Actual bundle size and font coverage remain pending source audit; the 60 MB
+  goal must be measured before the delivery decision. Do not replace full offline coverage with unannounced downloads.
+  Keep only a bounded set of loaded fonts and measured pages in memory.
+
+### 4.2 Ayah selection and highlights (planned replacement)
+
+- Shape each prescribed line with the correct page font and keep token-to-text-span mappings, including source
+  end markers and ligatures. Measure token boxes from those same shaped glyphs, then group boxes by canonical
+  `surah:ayah`. QUL's published layout describes lines and word ranges; no upstream pixel rectangles or complete
+  edition-matched image pack has been verified.
+- Tap any word or its numbered end marker to select the ayah and open a sheet with prominent Translation and
+  Bookmark options. Expanding Translation shows the canonical Arabic, Indonesian translation, copy and share.
+  Long press exposes the same actions. Playback joins these actions in T-D05. Dragging, pinching
+  or swiping must not trigger an ayah selection; frames, headers, unnumbered basmallahs and gaps select no ayah.
+- Draw highlights using the same measured geometry, keeping separate regions for different lines. The drawing,
+  overlays and hit tests share page-fit/zoom/pan/inset transforms; touches use the inverse transform. Do not use
+  a single enclosing rectangle that also covers neighboring ayat.
+- **Highlight API:** retain `ReaderController.highlight(AyahRange range, {Duration pulse = 4s})` for voice, search
+  and audio follow-along. An ayah target opens its locally resolved first page, pulses its visible segments for
+  four seconds, then leaves a subtle marker. Cross-page ranges retain selection as the user pages through them.
+  `hafidz://quran/ayah/2:255` must resolve to page 42 and highlight only 2:255.
+- Copy/share, translation/tafsir lookups and TalkBack/VoiceOver actions use canonical ayah identity and semantic
+  text. Encoded glyph strings never become copied or spoken text. Semantics follow Quran reading order; users
+  who need larger reflowing text can open list mode or ayah details.
+- Auto-save the canonical last-read ayah on page change (debounced one second). Preserve `user.sqlite` during the
+  planned content-v2 rebuild and recompute derived pages through the active edition.
+
+### 4.3 List mode (existing)
+
+- `ScrollablePositionedList.builder` per surah loads ayat from the bundled database and builds only
+  visible cards. `/quran/surah/:n?ayah=:a` positions the requested ayah. Each card shows verbatim Uthmani text in
+  the bundled Amiri Quran font (RTL), plus optional Kemenag Latin text and Indonesian translation. The switches use
+  `show_latin` and `show_translation` in `user.sqlite.kv_setting`. Bookmark, share, copy, and Kemenag tafsir actions
+  work offline; the play button shows an availability message until T-D05 adds murottal playback.
+- Long-press ayah → action sheet. The independent list reader retains adjustable text and its existing reading-position behavior.
 
 ## 5. Murottal player
 
@@ -122,12 +147,14 @@ class VoiceFailure extends VoiceState { final AppError error; const VoiceFailure
 | Primary | Emerald `#0F766E` (light) / `#2DD4BF` (dark) |
 | Accent | Gold `#B08D57` |
 | Surfaces | Light `#FAFAF7`, Sepia `#F5EEDC`, Dark `#0B1416` |
-| Arabic font | KFGQPC Uthmanic Script HAFS (fallback Amiri Quran), default 28 sp, range 20–44 |
+| Arabic font — list/details | Bundled Amiri Quran 1.003; default 28 sp, range 20–44 |
+| Mushaf font — planned | Exact QPC V1 font for each 1405H page, matched to its glyph data; source line layout and whole-page scaling |
 | Latin font | Inter / Plus Jakarta Sans |
 | Radius | 16 cards, 28 sheets |
 | Motion | 200 ms standard, 4 s highlight pulse |
 
-All Arabic widgets: `Directionality(textDirection: TextDirection.rtl)`, `textAlign: TextAlign.justify` in Mushaf mode.
+Arabic content uses RTL direction. The planned Mushaf uses each source line's centered/justified alignment in
+fixed page coordinates; generic paragraph wrapping and the list-mode font-size preference do not apply to it.
 
 ## 9. i18n
 

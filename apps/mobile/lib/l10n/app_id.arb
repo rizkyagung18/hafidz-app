@@ -1,0 +1,147 @@
+{
+  "@@locale": "id",
+  "appTitle": "Hafidz App",
+  "@appTitle": {
+    "description": "Nama aplikasi"
+  },
+  "tabHome": "Beranda",
+  "tabQuran": "Al-Qur'an",
+  "tabPrayer": "Sholat",
+  "tabQibla": "Kiblat",
+  "tabMore": "Lainnya",
+  "tabLearning": "Belajar",
+  "learningTitle": "Belajar Hafalan",
+  "learningPreview": "Rencanakan hafalan dan latihan bersama murottal dan pencarian ayat suara. Segera hadir.",
+  "quranChooseReader": "Buka surah",
+  "quranTranslationReader": "Surah & Terjemahan",
+  "quranMurattal": "Murattal",
+  "comingSoon": "Segera hadir",
+  "comingSoonHint": "Layar ini masih placeholder untuk kerangka aplikasi.",
+  "settingsTitle": "Pengaturan",
+  "aboutTitle": "Tentang & Atribusi",
+  "aboutSources": "Sumber data dan font",
+  "aboutOpenSource": "Buka sumber",
+  "aboutLicenses": "Lisensi perangkat lunak dan font",
+  "themeSection": "Tema",
+  "themeLight": "Terang",
+  "themeDark": "Gelap",
+  "themeSepia": "Sepia",
+  "languageSection": "Bahasa",
+  "languageId": "Bahasa Indonesia",
+  "languageEn": "English",
+  "voiceTitle": "Cari Ayat Suara",
+  "voiceResultTitle": "Hasil pencarian",
+  "voiceConnecting": "Menghubungkan pencarian suara…",
+  "voiceListening": "Mendengarkan bacaan dan mengikuti ayat…",
+  "voiceFinding": "Mencari ayat yang dibaca…",
+  "voiceFollowPaused": "Mengikuti ayat dijeda; mikrofon masih aktif.",
+  "voicePauseFollow": "Jeda ikuti",
+  "voiceResumeFollow": "Lanjut ikuti",
+  "voiceStop": "Hentikan",
+  "voiceConnectFailed": "Pencarian suara belum dapat terhubung. Periksa backend dan izin mikrofon.",
+  "voicePermissionDenied": "Izinkan akses mikrofon di Pengaturan untuk menggunakan pencarian suara.",
+  "voiceStreamBusy": "Koneksi tidak dapat mengikuti bacaan Anda. Coba lagi.",
+  "voiceRetry": "Coba lagi",
+  "quranTitle": "Al-Qur'an",
+  "quranLoadError": "Al-Qur'an tidak dapat dimuat.",
+  "quranNotFound": "Surah tidak ditemukan.",
+  "retry": "Coba lagi",
+  "revelationMakkah": "Makkiyah",
+  "revelationMadinah": "Madaniyah",
+  "quranAyahCount": "{count} ayat",
+  "@quranAyahCount": {"placeholders": {"count": {"type": "int"}}},
+  "quranAyahNumber": "Ayat {number}",
+  "@quranAyahNumber": {"placeholders": {"number": {"type": "int"}}},
+  "quranShowLatin": "Latin",
+  "quranShowTranslation": "Terjemahan",
+  "quranPlayAyah": "Putar ayat",
+  "quranAudioUnavailable": "Pemutar murottal akan tersedia pada tahap berikutnya.",
+  "quranBookmark": "Tandai ayat",
+  "quranRemoveBookmark": "Hapus penanda",
+  "quranBookmarkSaved": "Ayat ditandai.",
+  "quranBookmarkRemoved": "Penanda dihapus.",
+  "quranShare": "Bagikan ayat",
+  "quranCopy": "Salin ayat",
+  "quranCopied": "Ayat disalin.",
+  "quranTafsir": "Tafsir Kemenag",
+  "quranTafsirUnavailable": "Tafsir belum tersedia untuk ayat ini.",
+  "quranShareReference": "QS {name} {surah}:{ayah}",
+  "@quranShareReference": {"placeholders": {"name": {"type": "String"}, "surah": {"type": "int"}, "ayah": {"type": "int"}}},
+  "quranSurahTitle": "Surah {number}",
+  "@quranSurahTitle": {
+    "placeholders": {
+      "number": { "type": "int" }
+    }
+  },
+  "quranPageTitle": "Halaman {page}",
+  "@quranPageTitle": {
+    "placeholders": {
+      "page": { "type": "int" }
+    }
+  },
+  "quranPageNotFound": "Halaman mushaf tidak ditemukan.",
+  "quranPrintPackUnavailable": "Paket mushaf QUL lokal belum tersedia. Siapkan sumbernya, lalu coba lagi.",
+  "quranAyahNotFound": "Ayat tidak ditemukan.",
+  "quranMushafMode": "Buka mushaf",
+  "quranJump": "Lompat ke",
+  "quranJumpPage": "Halaman",
+  "quranJumpJuz": "Juz",
+  "quranJumpSurah": "Surah",
+  "quranJumpAyah": "Ayat",
+  "quranAyahReference": "Nomor surah:ayat",
+  "quranJuzNumber": "Juz {number}",
+  "@quranJuzNumber": {"placeholders": {"number": {"type": "int"}}},
+  "quranInvalidJump": "Masukkan tujuan yang valid.",
+  "quranJumpGo": "Buka",
+  "quranAyahTitle": "Ayat {key}",
+  "@quranAyahTitle": {
+    "placeholders": {
+      "key": { "type": "String" }
+    }
+  },
+  "prayerTitle": "Jadwal Sholat",
+  "prayerMonthTitle": "Jadwal bulanan",
+  "prayerSettingsTitle": "Pengaturan adzan",
+  "prayerLocationTitle": "Lokasi sholat",
+  "qiblaTitle": "Kiblat",
+  "moreTitle": "Lainnya",
+  "doaTitle": "Doa harian",
+  "doaDetailTitle": "Doa {id}",
+  "@doaDetailTitle": {
+    "placeholders": {
+      "id": { "type": "String" }
+    }
+  },
+  "hadithTitle": "Hadis",
+  "hadithBookTitle": "{book}",
+  "@hadithBookTitle": {
+    "placeholders": {
+      "book": { "type": "String" }
+    }
+  },
+  "hadithNumberTitle": "{book} #{number}",
+  "@hadithNumberTitle": {
+    "placeholders": {
+      "book": { "type": "String" },
+      "number": { "type": "String" }
+    }
+  },
+  "asmaulHusnaTitle": "Asmaul Husna",
+  "tasbihTitle": "Tasbih",
+  "hijriTitle": "Kalender Hijriah",
+  "homeVoiceCta": "Cari ayat dengan suara",
+  "moreDoa": "Doa",
+  "moreHadith": "Hadis",
+  "moreAsmaulHusna": "Asmaul Husna",
+  "moreTasbih": "Tasbih",
+  "moreHijri": "Kalender Hijriah",
+  "moreSettings": "Pengaturan",
+  "moreAbout": "Tentang & Atribusi",
+  "errorNetwork": "Tidak dapat terhubung ke server.",
+  "errorTimeout": "Permintaan kehabisan waktu.",
+  "errorCancelled": "Permintaan dibatalkan.",
+  "errorUnknown": "Terjadi kesalahan. Coba lagi.",
+  "errorRateLimited": "Terlalu banyak permintaan. Coba lagi nanti.",
+  "errorNotFound": "Data tidak ditemukan.",
+  "errorUpstream": "Layanan sementara tidak tersedia."
+}

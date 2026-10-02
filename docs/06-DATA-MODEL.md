@@ -1,6 +1,18 @@
 # 06 — Data Model
 
+**Current target:** QUL-only `quran.sqlite` v3 extends the implemented v2 semantic content with the Madinah 1405H print records in §1.1. The older v1 SQL in §1 is retained as migration history only; its Tanzil/EQuran sources and required Latin, tafsir, Surah meanings, and hizb-quarter fields are not current contracts. The exact semantic SQL is `tools/build_quran_db/build.py` and `apps/mobile/lib/core/database/quran_schema.drift`.
+
 Two SQLite databases on device (drift), plus an in-memory index on the server.
+
+The current mobile layer mirrors the QUL schema in `apps/mobile/lib/core/database/*.drift`.
+`openLocalDatabases()` checks the bundled SHA-256 sidecar, copies a changed
+`quran.sqlite` into the app support directory, and checks both `PRAGMA user_version`
+and `meta.db_version` before use. The content connection runs with SQLite
+`query_only=ON` and Drift migrations disabled. `user.sqlite` is stored separately
+in the same directory and keeps bookmarks and reading progress when content is
+replaced. Mobile CI builds and verifies the ignored content asset before tests.
+
+The Madinah 1405H print records are specified below. `user.sqlite` remains independently mutable.
 
 | Store | Location | Mutable | Content |
 |---|---|---|---|
@@ -98,6 +110,92 @@ Build invariants (checked by `tools/build_quran_db/verify.py`, CI fails otherwis
 - `page` and `juz` from alquran.cloud equal the corresponding full-Qur'an boundaries in Tanzil `quran-data.xml` for all ayat (cross-source check). Tanzil metadata has no hizb-quarter boundaries; alquran.cloud supplies `hizbQuarter`, which is range-checked (1..240). Quran Foundation pre-live only exposes surahs 1–2, so a full-Qur'an Quran Foundation page comparison is an optional release check after production access is approved.
 - SHA-256 of Tanzil source files matches the pinned value in `tools/build_quran_db/sources.lock.json`.
 - Spot checks: `2:255 → page 42, juz 3`; `1:1 → page 1`; `114:6 → page 604`; `18:1 → juz 15`.
+
+## 1.1 Madinah 1405H presentation data, schema v3
+
+Design contract for T-M04-R1–R3; see [docs/11](11-MUSHAF-1405H-REDESIGN.md) and
+[ADR-006](adr/ADR-006-madinah-1405h-mushaf.md). This is an additive rebuild of immutable mobile content, not a
+replacement of canonical Qur'an text or the user database. Final SQL and the upstream-to-local adapter follow
+inspection of the actual QUL exports in R1.
+
+### Source identity and local records
+
+Pin these sources together: [layout resource 15](https://qul.tarteel.ai/resources/mushaf-layout/15),
+[word glyphs 57](https://qul.tarteel.ai/resources/quran-script/57), and
+[page fonts 238](https://qul.tarteel.ai/resources/font/238). QUL's preview tool identifies this edition as
+`mushaf_layouts/2`; that tool ID is distinct from download resource 15.
+
+The inspected layout export has `info(name, number_of_pages, lines_per_page, font_name)` and
+`pages(page_number, line_number, line_type, is_centered, first_word_id, last_word_id, surah_number)`. The
+inspected word export has `words(id, location, surah, ayah, word, text)`; `id` joins the page-line word ranges,
+and `location` is `surah:ayah:word`. QUL's website example names `word_index` and `word_key`, which are absent
+from this actual export. Validate the pinned source hash and schema before import. Neither these resources nor
+this contract promise upstream pixel rectangles.
+
+Local records (names describe our schema, not asserted upstream table names):
+
+| Record | Required identity and content |
+|---|---|
+| `mushaf_edition` | Key `madinah-1405h-qpc-v1`; print identity, resource/tool IDs, source revision or snapshot date, pack version, source-lock hash, provenance/license references, page count 604 |
+| `mushaf_asset` | Composite edition/asset ID; kind, optional page number, local path, SHA-256, byte size, source URL, license evidence reference; includes fonts and any approved auxiliary artwork |
+| `mushaf_page` | Composite edition/page key; exact font asset reference, visual-reference/layout-profile ID, fixed design dimensions established by the visual proof |
+| `mushaf_line` | Composite edition/page/line key; source line type and centered flag, first/last source word IDs when present, surah number when applicable; preserve source ordering and special rows |
+| `mushaf_word` | Composite edition/source word ID; canonical `ayah_id` reference, source word key/position, exact glyph string, derived page/line/order membership; font via page or explicit asset reference if the export requires it |
+| `mushaf_ayah_page` | Derived table of canonical ayah membership on edition pages and lines; retains every segment, including an ayah spanning pages |
+
+The v3 package has one edition `madinah-1405h-qpc-v1`. `mushaf_page` holds each page's font asset and exact source line count. `mushaf_line` holds the source kind (`ayah`, `surah_name`, `basmallah`), centered flag, optional surah, and the source word range. `mushaf_word` holds source word ID, `surah:ayah:word` key, exact glyph, canonical ayah ID, page, line, and position; its page/line order must agree with the layout. `mushaf_ayah_page` records the first/last line and word for each ayah segment on a page. All print tables use the edition key. `mushaf_asset` holds each of 604 page fonts, four auxiliary fonts, and 114 generated headers with a local relative path, hash, byte count, source reference, and unresolved rights status. `mushaf_edition` pins the combined source hash and manifest hash. The approved local renderer uses a 660-unit page width with 8-unit horizontal insets and a 42-unit QPC word font; extra portrait height becomes line leading and never changes source word or line membership.
+
+The build order is: stage and hash the ignored QUL fonts and header images, build v3 SQLite from the pinned semantic and print locks, verify the database and pack together, then rebuild the ASR index from that exact SQLite checksum. The mobile loader reads line and word rows from SQLite and verifies the matching manifest, font, and header hashes before displaying a page. Page JSON files are no longer runtime content. Packaging remains local while resource-specific redistribution rights are unresolved.
+
+`mushaf_page` design dimensions come from our approved rendering profile, not invented QUL coordinate fields.
+Marker ownership and token roles must follow the inspected source: an ayah end ornament may be part of a glyph
+token rather than a standalone word. Never infer a universal word count or strip marker glyphs. Non-ayah line
+assets (surah headers, unnumbered basmala) have no fake canonical ayah ID. Source adapters must document how they
+map any separately encoded markers or auxiliary fonts before the local schema is finalized.
+
+Word IDs are not ayah IDs. Join QUL words to existing canonical ayat by validated `surah:ayah`; keep all 6,236
+canonical IDs, verbatim text, translations, tafsir, and FTS content unchanged. Preserve the v1 `ayah.page`, `page`,
+and `surah.first_page` values for existing consumers. New Mushaf navigation derives the first page of an ayah,
+surah, or juz from the edition's membership and existing canonical boundaries. Report every difference from the
+legacy page map rather than rewriting it silently.
+
+Runtime token boxes are derived from the exact shaped line. They are not an authoritative content table. Any
+geometry cache is keyed by edition, pack version, font hash, and layout profile; invalidate it when these change.
+
+### Additional v3 build invariants
+
+- Exactly one complete active edition with contiguous pages 1–604 and complete source line coverage. Ordinary
+  pages follow 15-line layout rules; opening pages, headers, and basmala rows follow verified source exceptions.
+- Every source word is accounted for in its prescribed order and valid line range. No dropped, duplicated, or
+  orphaned ayah tokens; canonical references resolve within the existing 114 surahs and 6,236 ayat.
+- Every canonical ayah has complete rendering membership, including all segments and its numbered end marker.
+  Preserve Al-Fatihah's numbered basmala and separate unnumbered basmala rows; At-Tawbah has no added basmala.
+- Fonts cover every used glyph and match the pinned edition/page. Missing fonts, missing glyphs, mixed revisions,
+  or unknown line/token kinds fail verification; no fallback to another print or Amiri.
+- Canonical text hashes and IDs stay unchanged; existing v1 semantic invariants still pass. Compare the full
+  1405H page map with legacy metadata and retain the comparison report even if all boundaries agree.
+- Spot checks include pages 1, 2, 42 (2:253–256), 48 (2:282), 121 (5:77–82), 187 (9:1–6), and 604, confirmed
+  against the pinned source. A passing 2:255 check alone does not prove the whole edition.
+- Source-lock, asset paths, sizes, checksums, provenance, and resource-specific redistribution evidence cover
+  every shipped input. Verify all 604 pages offline; measure the final package against the provisional size goal.
+
+### Coordinated loading and user-data preservation
+
+Advance `PRAGMA user_version` and `meta.db_version` together to 3 with matching builder, verifier, Drift, loader,
+manifest and checksum changes. The v2 semantic database alone cannot render the v3 print view. Verify staged
+content and matching assets before replacing installed content; preserve the last verified v3 package on a failed
+update. A first v1/v2 → v3 failure must preserve existing data and show a recoverable print-content error. Never
+reset `user.sqlite` to repair content loading.
+
+Keep bookmarks, notes, history, and settings by their canonical references. Recompute `reading_position.page`
+from its saved `ayah_id` in the new edition, preserving the ayah and mode. Record edition/pack identity in
+`kv_setting` for page-based state. Preserve existing khatam page progress with its original mapping; do not
+relabel completed pages as 1405H if boundaries differ. Any conversion must use the full page-map comparison
+and keep the original state recoverable.
+
+The existing `/v1/quran/db/manifest` contract stays unchanged. Mobile schema v3 is not permission to replace
+the artifact served to v1 clients. A later remote package update needs a separately
+documented version/asset negotiation contract in both API specs; none is introduced by this redesign.
 
 ## 2. `user.sqlite` (mutable)
 

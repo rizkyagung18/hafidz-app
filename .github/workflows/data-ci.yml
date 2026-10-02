@@ -41,23 +41,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
-      - uses: actions/cache@v4
-        with:
-          path: |
-            tools/build_quran_db/.cache
-            apps/mobile/assets/db/quran.sqlite
-            apps/mobile/assets/db/quran.sqlite.sha256
-          key: quran-sources-${{ runner.os }}-${{ hashFiles('tools/build_quran_db/sources.lock.json') }}
-
       - name: Install API and data-builder dependencies
         working-directory: services/api
         run: uv sync --locked --extra dev
 
-      - name: Rebuild database from pinned source snapshots
-        run: uv run --project services/api python tools/build_quran_db/build.py
-
-      - name: Verify database source hashes and invariants
-        run: uv run --project services/api python tools/build_quran_db/verify.py
-
-      - name: Build and verify search index
-        run: uv run --project services/api python tools/build_quran_db/build_index.py
+      - name: Test QUL 1405H audit and local proof generators
+        run: uv run --project services/api python -m unittest tools.build_quran_db.test_audit_qul_1405h tools.build_quran_db.test_preview_qul_1405h
+      # The pinned QUL ZIPs and generated assets stay local pending rights review.
+      # Full build.py, verify.py, and build_index.py checks run on developer machines.

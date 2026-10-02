@@ -53,7 +53,7 @@ class AyahMatchResponse(BaseModel):
     juz: int
     surah_name_arabic: str
     surah_name_latin: str
-    surah_name_translation: str
+    surah_name_translation: str | None
     score: float = Field(ge=0, le=1)
     match_span: MatchSpanResponse | None = None
 

@@ -1,0 +1,81 @@
+{
+  "edition": "madinah-1405h-qpc-v1",
+  "audited_on": "2026-10-01",
+  "status": "local audit only; redistribution rights and visual acceptance pending",
+  "revision": null,
+  "resources": {
+    "layout": {
+      "url": "https://qul.tarteel.ai/resources/mushaf-layout/15",
+      "archive": "qpc-v1-15-lines.db.zip",
+      "archive_bytes": 99413,
+      "archive_sha256": "fb04bdfb0da38925853bc0ccdecd08b1536ac74fb1c8e9ff27a9af7ad7a452f9",
+      "extracted": "qpc-v1-15-lines.db",
+      "extracted_bytes": 241664,
+      "extracted_sha256": "54e5cf604da95f9e65db3fb9dce0c75c17d197e41543ba846ed49264f9c0442a",
+      "schema": "info(name,number_of_pages,lines_per_page,font_name); pages(page_number,line_number,line_type,is_centered,first_word_id,last_word_id,surah_number)"
+    },
+    "word_glyphs": {
+      "url": "https://qul.tarteel.ai/resources/quran-script/57",
+      "archive": "qpc-v1-glyph-codes-wbw.db.zip",
+      "archive_bytes": 1200211,
+      "archive_sha256": "c1f6e74ba4272b2573f7bbbb949c73d0eab257ff74183d783fd81581204aef1a",
+      "extracted": "qpc-v1-glyph-codes-wbw.db",
+      "extracted_bytes": 2437120,
+      "extracted_sha256": "8e3ab8bfe60ae20af8b6ddd28eb95d2262b01cc285477b831e267ad4360972cc",
+      "schema": "words(id,location,surah,ayah,word,text); id joins pages.first_word_id/last_word_id"
+    },
+    "page_fonts": {
+      "url": "https://qul.tarteel.ai/resources/font/238",
+      "archive": "QPC-V1-Font.ttf.bz2",
+      "actual_archive_format": "zip",
+      "archive_bytes": 54502444,
+      "archive_sha256": "b276e07b6e7c8df255c0a61fa9ae7f0d02fde074eec4e04c13fec75cf72e0031",
+      "extracted_file_count": 604,
+      "extracted_total_bytes": 95020860,
+      "pattern": "p{page}.ttf, pages 1..604"
+    },
+    "common_font": {
+      "url": "https://qul.tarteel.ai/resources/font/459",
+      "filename": "quran-common.ttf",
+      "bytes": 125444,
+      "sha256": "63675d54764c3e0acd3875e191dc6f0af1339ddbd53a1df7fcebbaabebc918fa"
+    },
+    "surah_name_font": {
+      "url": "https://qul.tarteel.ai/resources/font/456",
+      "filename": "surah_name_v1.ttf",
+      "bytes": 153660,
+      "sha256": "24928ce6a9be4c534ccdcaca7e68e6b9402b5188a9ad201baa3539cf6ca5c7ca"
+    },
+    "surah_header_font": {
+      "url": "https://qul.tarteel.ai/resources/font/458",
+      "archive": "QCF_SurahHeader_COLOR-Regular.ttf.zip",
+      "archive_sha256": "124cda8df1ffc72103df1eb9d6940cbc8eb88767c53aec9739611d6f0a2e4b8f",
+      "filename": "QCF_SurahHeader_COLOR-Regular.ttf",
+      "sha256": "731cdc14a3e50669ffd44c06335ce269665e22cb75db39ca137527e29c516308"
+    },
+    "surah_name_v2_font": {
+      "url": "https://qul.tarteel.ai/resources/font/455",
+      "archive": "surah-name-v2.ttf.zip",
+      "archive_sha256": "719cca6c335e13d9b7801515688c76ff63d0923ede97f22064300f00ae6d92cd",
+      "filename": "surah-name-v2.ttf",
+      "sha256": "2d4678ef53ef76c361c32c13a9ad26317b8f8219089ab5822aafa6ed5d17502a"
+    },
+    "common_font_archive": {
+      "url": "https://qul.tarteel.ai/resources/font/459",
+      "archive": "quran-common.ttf.zip",
+      "archive_sha256": "ac2bf22fa11f3ca5500ed173f57f220e91310d13e7304b275f61c9548d0cab67",
+      "filename": "quran-common.ttf",
+      "sha256": "63675d54764c3e0acd3875e191dc6f0af1339ddbd53a1df7fcebbaabebc918fa"
+    }
+  },
+  "audit_result": {
+    "pages": 604,
+    "line_rows": 9046,
+    "source_words": 83668,
+    "mapped_canonical_ayat": 6236,
+    "legacy_page_differences": [],
+    "missing_page_fonts": [],
+    "missing_glyphs_by_page": {}
+  },
+  "redistribution_license_evidence": null
+}

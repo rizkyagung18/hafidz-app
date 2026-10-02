@@ -1,0 +1,130 @@
+-- Mirror of docs/06-DATA-MODEL.md §1 and tools/build_quran_db/build.py.
+CREATE TABLE meta ("key" TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+CREATE TABLE surah (
+  number INTEGER PRIMARY KEY,
+  name_arabic TEXT NOT NULL,
+  name_latin TEXT NOT NULL,
+  translation_id TEXT,
+  translation_en TEXT,
+  ayah_count INTEGER NOT NULL,
+  revelation_place TEXT NOT NULL CHECK (revelation_place IN ('makkah','madinah')),
+  revelation_order INTEGER,
+  first_page INTEGER NOT NULL,
+  bismillah_pre INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE ayah (
+  id INTEGER PRIMARY KEY,
+  surah INTEGER NOT NULL REFERENCES surah(number),
+  ayah INTEGER NOT NULL,
+  page INTEGER NOT NULL,
+  juz INTEGER NOT NULL,
+  hizb_quarter INTEGER,
+  ruku INTEGER,
+  manzil INTEGER,
+  sajda INTEGER NOT NULL DEFAULT 0,
+  text_uthmani TEXT NOT NULL,
+  text_simple TEXT NOT NULL,
+  text_norm TEXT NOT NULL,
+  text_latin TEXT,
+  translation_id TEXT NOT NULL,
+  translation_en TEXT,
+  hizb INTEGER NOT NULL,
+  UNIQUE (surah, ayah)
+);
+CREATE INDEX ix_ayah_page ON ayah(page);
+CREATE INDEX ix_ayah_juz ON ayah(juz);
+
+CREATE TABLE tafsir (
+  ayah_id INTEGER NOT NULL REFERENCES ayah(id),
+  source TEXT NOT NULL,
+  text TEXT NOT NULL AS tafsirText,
+  PRIMARY KEY (ayah_id, source)
+);
+
+CREATE TABLE page (
+  number INTEGER PRIMARY KEY,
+  first_ayah INTEGER NOT NULL REFERENCES ayah(id),
+  last_ayah INTEGER NOT NULL REFERENCES ayah(id),
+  juz INTEGER NOT NULL
+);
+
+CREATE TABLE juz (
+  number INTEGER PRIMARY KEY,
+  first_ayah INTEGER NOT NULL,
+  last_ayah INTEGER NOT NULL
+);
+
+CREATE TABLE hizb (
+  number INTEGER PRIMARY KEY,
+  first_ayah INTEGER NOT NULL,
+  last_ayah INTEGER NOT NULL
+);
+
+CREATE VIRTUAL TABLE ayah_fts USING fts5(
+  text_norm, translation_id, translation_en,
+  content='ayah', content_rowid='id', tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TABLE doa (
+  id INTEGER PRIMARY KEY, grup TEXT, nama TEXT, ar TEXT, tr TEXT,
+  idn TEXT, tentang TEXT, tags TEXT
+);
+
+CREATE TABLE asmaul_husna (
+  number INTEGER PRIMARY KEY, arabic TEXT, latin TEXT, meaning_id TEXT, meaning_en TEXT
+);
+
+CREATE TABLE prayer_location (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, province TEXT NOT NULL,
+  lat REAL NOT NULL, lng REAL NOT NULL, tz TEXT NOT NULL, myquran_id TEXT
+);
+
+CREATE TABLE mushaf_edition (
+  id TEXT PRIMARY KEY, pack_version INTEGER NOT NULL, page_count INTEGER NOT NULL,
+  source_sha256 TEXT NOT NULL, manifest_sha256 TEXT NOT NULL,
+  design_width REAL NOT NULL, word_font_size REAL NOT NULL
+);
+
+CREATE TABLE mushaf_asset (
+  edition_id TEXT NOT NULL REFERENCES mushaf_edition(id), id TEXT NOT NULL,
+  kind TEXT NOT NULL, page INTEGER, path TEXT NOT NULL,
+  sha256 TEXT NOT NULL, byte_size INTEGER NOT NULL,
+  source_name TEXT NOT NULL, rights_status TEXT NOT NULL,
+  PRIMARY KEY (edition_id, id), UNIQUE (edition_id, path)
+);
+
+CREATE TABLE mushaf_page (
+  edition_id TEXT NOT NULL REFERENCES mushaf_edition(id), page INTEGER NOT NULL,
+  font_asset_id TEXT NOT NULL, line_count INTEGER NOT NULL,
+  PRIMARY KEY (edition_id, page),
+  FOREIGN KEY (edition_id, font_asset_id) REFERENCES mushaf_asset(edition_id, id)
+);
+
+CREATE TABLE mushaf_line (
+  edition_id TEXT NOT NULL, page INTEGER NOT NULL, line INTEGER NOT NULL,
+  kind TEXT NOT NULL, centered INTEGER NOT NULL, surah INTEGER,
+  first_word_id INTEGER, last_word_id INTEGER,
+  PRIMARY KEY (edition_id, page, line),
+  FOREIGN KEY (edition_id, page) REFERENCES mushaf_page(edition_id, page)
+);
+
+CREATE TABLE mushaf_word (
+  edition_id TEXT NOT NULL, id INTEGER NOT NULL,
+  ayah_id INTEGER NOT NULL REFERENCES ayah(id),
+  word_key TEXT NOT NULL, glyph TEXT NOT NULL,
+  page INTEGER NOT NULL, line INTEGER NOT NULL, position INTEGER NOT NULL,
+  PRIMARY KEY (edition_id, id), UNIQUE (edition_id, word_key),
+  FOREIGN KEY (edition_id, page, line) REFERENCES mushaf_line(edition_id, page, line)
+);
+CREATE INDEX ix_mushaf_word_page_line ON mushaf_word(edition_id, page, line, position);
+
+CREATE TABLE mushaf_ayah_page (
+  edition_id TEXT NOT NULL, ayah_id INTEGER NOT NULL REFERENCES ayah(id),
+  page INTEGER NOT NULL, first_line INTEGER NOT NULL, last_line INTEGER NOT NULL,
+  first_word_id INTEGER NOT NULL, last_word_id INTEGER NOT NULL,
+  PRIMARY KEY (edition_id, ayah_id, page),
+  FOREIGN KEY (edition_id, page) REFERENCES mushaf_page(edition_id, page)
+);
+CREATE INDEX ix_mushaf_ayah_page_page ON mushaf_ayah_page(edition_id, page, ayah_id);

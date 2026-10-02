@@ -1,5 +1,29 @@
 # 09 — Testing & QA Strategy
 
+**Current release gates:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) adds source-exact QUL v2 checks, print-package v3 touch/visual proof, and live streaming follow tests. The existing audio golden set is empty; no measured live or one-shot accuracy threshold may be claimed from it.
+
+**Live implementation evidence (2026-10-01):** T-A06 protocol tests cover stable revisions, repeated/ambiguous
+matches, ordered events, invalid frames/commands, rate and connection rejection, inference saturation,
+backpressure cancellation, and Redis session release. T-M05 tests cover fixed PCM framing, permission denial,
+bounded send queue, disconnect cleanup, validated events, local page follow, pause/resume, and retry. On the
+iOS Simulator, live microphone recitation followed 2:256 → 2:257 and moved from page 42 to 43. The user observed
+more than five seconds of lag on the first pass. The backend now starts matching at 1.5 seconds, checks each
+further second, and keeps a four-second rolling window; a simulator retest is pending. Physical iPhone proof is
+deferred by user. Simulator behavior does not establish microphone or ASR accuracy on a phone.
+With the local model, matching index, API and Redis running, a real WebSocket
+connection accepted half-second silent PCM frames, emitted `ready → ambiguous → stopped`
+with increasing sequence numbers, and allowed immediate reconnection with the
+same device ID. This confirms transport and lock cleanup, not recitation accuracy.
+An ephemeral macOS speech synthesis stream of QUL ayah 2:256 reached a stable
+backend event in about 4.6 seconds with the original cadence and 3.9 seconds
+with the shorter cadence. This is a local timing comparison, not a recitation
+accuracy measurement or a latency guarantee for human speech.
+In a two-ayah synthetic stream (2:256 then 2:257), the four-second context
+produced the second stable event about 4.7 seconds after the second ayah began.
+Reducing context to three seconds improved that by only about 0.1 seconds, so
+the four-second context was retained for a fuller matching signal. Human
+recitation latency on the simulator still needs the post-tuning retest.
+
 ## 1. Test pyramid
 
 | Layer | Tooling | Scope | Gate |
@@ -84,3 +108,64 @@ false-auto-navigate at all (CI compares against `docs/eval/baseline.json`).
 
 Scenarios: airplane mode (offline reader, calc prayer), permission denials, location change across timezones,
 recording with TV/fan noise, Bluetooth headset mic, interruptions (phone call during recording).
+
+## 6. Madinah 1405H Mushaf redesign — planned validation
+
+This section defines release checks for the [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
+[ADR-006](adr/ADR-006-madinah-1405h-mushaf.md). The read-only source audit has passed the page, ayah,
+word-membership, legacy-page comparison and page-font glyph coverage checks in §6.1 on the local QUL download.
+Rights, renderer fidelity, device interaction, migration, offline and performance checks remain open. Existing
+T-M04 tests establish prototype navigation behavior, not print fidelity.
+
+### 6.1 Source and content validation
+
+- Audit the exact QUL layout 15, script 57 and font 238 downloads together. Pin sources, versions/retrieval dates,
+  license evidence and hashes; reject wrong-edition, missing or corrupted artifacts.
+- Verify 604 contiguous pages and complete mapping to all 6,236 canonical ayat and 114 surahs. Compare all
+  edition page assignments against existing Madani metadata; investigate mismatches instead of silently overwriting
+  either source. Keep the established `2:255 → page 42` deep-link check.
+- Verify each source line's order, type, alignment and word range. Every referenced word must exist and resolve
+  to a canonical ayah. Validate source end-marker records explicitly; do not assume every glyph record is a spoken word.
+- Preserve source-driven opening-page line counts, centered lines, surah headings and basmallah handling.
+  Do not require 15 occupied rows on every page or synthesize duplicate basmallahs/end markers.
+- Confirm matching page-font coverage without fallback glyphs. Canonical Tanzil text and global ayah IDs must be
+  unchanged; QUL word IDs and glyph codes must never become bookmark identifiers or substitutes for canonical semantic text.
+
+### 6.2 Print fidelity and interaction
+
+- Approve reference comparisons and maintain separate Android/iOS golden baselines for pages **1, 2, 42, 48, 121,
+  187 and 604**. Include source page/edition evidence with each baseline. Review line breaks, glyphs, spacing,
+  alignment, heading/basmallah placement, ayah end markers and page proportions; a screenshot that matches the
+  implementation alone does not establish source fidelity.
+- Verify page structure stays fixed across phone sizes, orientation changes and text-scale settings. Scale/zoom
+  the page without automatic paragraph wrapping or moving words between source lines; accessible larger text is
+  available through list mode and ayah details.
+- Tap and long-press visible words and end markers near the center and both edges of each target. The selected
+  canonical ayah must agree with the source mapping, including neighboring ayat on one line and ayat spanning lines.
+  Header, margin and inter-ayah blank-space taps must not accidentally select a nearby ayah.
+- Exercise inverse scale, translation and zoom transforms for hit testing after resize and pan. Use the rendered
+  word geometry for both hit targets and highlight regions; no separate guessed rectangles.
+- Test multi-line and multi-ayah range highlighting, adjacent-page ranges, four-second pulse and retained marker,
+  interruption/replacement by a new selection, and reduced-motion behavior. Highlight only the targeted ayah
+  fragments while preserving glyph readability.
+- Cover canonical ayah deep links, page links, last read, Voice Ayah Finder results and later audio follow-along.
+  Resolve canonical ayah ranges through the selected edition and verify the same ayah is targeted by every entry path.
+
+### 6.3 Installation, offline use and performance
+
+- Exercise the planned content schema v1 → v2 replacement with coordinated `PRAGMA user_version`, `meta.db_version`,
+  Drift definitions and mobile loader checks. Reject unsupported versions, mismatched checksums, missing page fonts
+  and partial bundles. A failed v2-pack update keeps a compatible verified v2 pack usable. A failed first v1 → v2
+  transition preserves v1 data on disk and shows a recoverable content error when no valid v2 pack exists; it must
+  not try to render v1 as the new print.
+- Seed `user.sqlite` with bookmarks, notes, last read, khatam progress and settings before replacing content. Verify preservation of user
+  data, stable global ayah references and correct recomputation of any derived page values. Never reset user data
+  as a content-update mechanism. Preserve the original edition of page-based progress; do not silently relabel
+  completed pages when edition boundaries differ.
+- Start a fresh install in airplane mode and visit all 604 pages with no previously warmed font/image cache.
+  Validate licensed full-bundle availability, fast page jumps and complete ayah interactions offline.
+- Measure release download size, installed content/font size, startup time, peak memory and page-swipe frame timing
+  on representative Android and iOS devices, including repeated page traversal and engine-held fonts. Compare
+  the complete bundle against the PRD size/performance budgets;
+  a debug APK or a dependency estimate is not release-size evidence. If the bundle cannot meet the budget, document
+  the measured tradeoff before changing delivery or offline requirements.

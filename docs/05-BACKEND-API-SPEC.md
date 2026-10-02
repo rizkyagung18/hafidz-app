@@ -1,5 +1,7 @@
 # 05 — Backend (BFF) API Specification
 
+**Current Qur'an and live voice contract:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md). Planned legacy content proxies below are deferred and must not fetch Qur'an content from non-QUL providers.
+
 Base URL: `https://api.example.com` (replace with the owned deployment domain before release) · `http://localhost:8000` (dev). All paths prefixed with `/v1`.
 Machine-readable contract: [`docs/api/openapi.yaml`](api/openapi.yaml) — keep both in sync. FastAPI also serves
 `/docs` (Swagger) and `/openapi.json` in non-prod.
@@ -59,12 +61,40 @@ timing_ms: {decode, asr, match, total}
 AyahMatch:
   key: "2:255" | "2:255-256"
   surah, ayah_start, ayah_end, page, juz: int
-  surah_name_arabic, surah_name_latin, surah_name_translation: str
+  surah_name_arabic, surah_name_latin: str
+  surah_name_translation: str | null   # null until a QUL meaning source is selected
   score: float
   match_span: {ayah:int, word_start:int, word_end:int} | null
 ```
 
+### 2.1a Live Voice Finder WebSocket
+
+`WS /v1/voice/live?hint_surah=1..114` requires `X-Device-Id: <uuid>`. The server sends
+`{"type":"ready","sequence":0,"sample_rate":16000,"format":"pcm_s16le_mono"}`
+before accepting audio. The client then sends ordered binary PCM16LE mono frames of
+0.5–1 second (maximum 32,000 bytes per frame), or `{"type":"stop"}` to finish.
+
+Server JSON events have increasing `sequence`: `candidate`, `ayah`, `ambiguous`,
+`error`, and `stopped`. A stable `ayah` also has an increasing session-local
+`revision`, `surah`, `ayah_start`, `ayah_end`, and `confidence` in 0..1.
+`candidate` and `ambiguous` never move the reader. The optional response `page`
+is informational; mobile resolves the canonical ayah range against its installed
+QUL edition. Errors end the session: `INVALID_PCM_FRAME`, `INVALID_COMMAND`,
+`BACKPRESSURE`, `SESSION_EXPIRED`, or `INFERENCE_FAILED`. Invalid headers or
+query values close with 4400; rate or concurrent-session limits close with 4429.
+The server starts matching after 1.5 seconds of audio, schedules another window
+after each further second when inference capacity is available, and retains at
+most four seconds of rolling audio per session. It permits one
+inference per session and limits process-wide simultaneous inferences to the
+configured ASR worker count. A session lasts at most 180 seconds. Audio and
+transcripts are processed in memory and are not persisted or logged.
+
+WebSockets are outside this project's REST OpenAPI file; this section and
+[docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) define the live protocol.
+
 ### 2.2 Qur'an content (cached proxy; the app normally uses the bundled DB)
+
+These endpoints are unimplemented roadmap placeholders. If implemented during the QUL-only phase, they must use the pinned QUL corpus; Latin and tafsir fields/endpoints are unavailable until QUL sources are selected.
 
 | Method & path | Description | Cache |
 |---|---|---|
@@ -132,7 +162,7 @@ Response:
 | Path | Description |
 |---|---|
 | `GET /healthz` | Liveness |
-| `GET /readyz` | Model loaded + index checksum OK + Redis reachable |
+| `GET /readyz` | Planned readiness endpoint; not implemented yet. Do not use for current local checks. |
 | `GET /metrics` | Prometheus (internal network only) |
 
 ## 3. Server configuration (`.env.example`)

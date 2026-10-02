@@ -15,8 +15,8 @@ class AyahLocation(TypedDict):
 class SurahName(TypedDict):
     arabic: str
     latin: str
-    translation_id: str
-    translation_en: str
+    translation_id: str | None
+    translation_en: str | None
 
 
 class QuranMetadata:
@@ -44,8 +44,8 @@ class QuranMetadata:
                 int(row[0]): {
                     "arabic": str(row[1]),
                     "latin": str(row[2]),
-                    "translation_id": str(row[3]),
-                    "translation_en": str(row[4]),
+                    "translation_id": str(row[3]) if row[3] is not None else None,
+                    "translation_en": str(row[4]) if row[4] is not None else None,
                 }
                 for row in connection.execute(
                     "SELECT number, name_arabic, name_latin, translation_id, "
