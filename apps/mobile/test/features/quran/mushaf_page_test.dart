@@ -20,23 +20,36 @@ import 'package:hafidz_app/features/quran/domain/ayah_ref.dart';
 import 'package:hafidz_app/features/quran/presentation/mushaf_page_screen.dart';
 import 'package:hafidz_app/features/quran/presentation/reader_controller.dart';
 import 'package:hafidz_app/features/voice/data/live_voice_session.dart';
+import 'package:hafidz_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _QuietCapture implements LiveAudioCapture {
+  _QuietCapture({this.permitted = true});
+  final bool permitted;
+  bool started = false;
   final StreamController<Uint8List> _chunks = StreamController<Uint8List>();
   bool stopped = false;
 
   @override
-  Future<bool> hasPermission() async => true;
+  Future<bool> hasPermission() async => permitted;
 
   @override
-  Future<Stream<Uint8List>> start() async => _chunks.stream;
+  Future<Stream<Uint8List>> start() async {
+    started = true;
+    return _chunks.stream;
+  }
 
   @override
   Future<void> stop() async => stopped = true;
 
   @override
-  Future<void> dispose() => _chunks.close();
+  Future<void> dispose() async {
+    if (started) {
+      await _chunks.close();
+    } else {
+      unawaited(_chunks.close());
+    }
+  }
 }
 
 class _EventSocket implements LiveVoiceSocket {
@@ -170,6 +183,11 @@ void main() {
     final mic = tester.getRect(find.byIcon(Icons.mic));
     final print = tester.getRect(find.byKey(const Key('mushaf-line-42-8')));
     expect(mic.overlaps(print), isFalse);
+    final micButton = tester.getRect(find.byKey(const Key('mushaf-voice-mic')));
+    final pageControl = tester.getRect(
+      find.byKey(const Key('mushaf-page-jump')),
+    );
+    expect(micButton.overlaps(pageControl), isFalse);
   });
 
   testWidgets('selected text is vertically centered without word padding', (
@@ -363,12 +381,14 @@ void main() {
   ) async {
     final sockets = <_EventSocket>[];
     final captures = <_QuietCapture>[];
+    final callbacks = <void Function(Map<String, dynamic>)>[];
     final container = await pumpPage(
       tester,
       '/quran/page/42',
       voiceFactory: (deviceId, onEvent, onError) {
         final capture = _QuietCapture();
         captures.add(capture);
+        callbacks.add(onEvent);
         return LiveVoiceSession(
           deviceId: deviceId,
           onEvent: onEvent,
@@ -404,10 +424,20 @@ void main() {
 
     sockets.single.emit(
       '{"type":"candidate","sequence":1,"revision":0,"surah":2,'
-      '"ayah_start":255,"ayah_end":255,"confidence":0.9}',
+      '"ayah_start":255,"ayah_end":255,"confidence":0.9,'
+      '"transcript":"اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ"}',
     );
     await tester.pump();
     expect(find.text('Mencari ayat yang dibaca…'), findsOneWidget);
+    expect(find.text('اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ'), findsOneWidget);
+    final preview = tester.widget<Text>(
+      find.byKey(const Key('voice-transcript')),
+    );
+    expect(preview.style?.fontSize, 14);
+    expect(preview.style?.fontWeight, FontWeight.w400);
+    expect(preview.style?.color, const Color(0xFF64716A));
+    expect(find.textContaining('Halaman 42'), findsOneWidget);
+    expect(container.read(readerControllerProvider), isNull);
 
     sockets.single.emit(
       '{"type":"ayah","sequence":2,"revision":1,"surah":2,'
@@ -418,22 +448,29 @@ void main() {
     );
     await tester.pump();
     expect(container.read(readerControllerProvider)?.range.key, '2:255');
+    expect(find.byKey(const Key('voice-transcript')), findsNothing);
 
     sockets.single.emit(
       '{"type":"candidate","sequence":3,"revision":1,"surah":2,'
-      '"ayah_start":255,"ayah_end":255,"confidence":0.9}',
+      '"ayah_start":255,"ayah_end":255,"confidence":0.9,"transcript":"اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ"}',
     );
     await tester.pump();
-    expect(find.text('Mendengarkan bacaan dan mengikuti ayat…'), findsOneWidget);
+    expect(
+      find.text('Mendengarkan bacaan dan mengikuti ayat…'),
+      findsOneWidget,
+    );
 
+    expect(find.byKey(const Key('voice-transcript')), findsNothing);
     await tester.tap(find.byKey(const Key('voice-pause-follow')));
     await tester.pump();
     sockets.single.emit(
       '{"type":"ayah","sequence":4,"revision":2,"surah":2,'
-      '"ayah_start":257,"ayah_end":257,"confidence":0.9,"page":1}',
+      '"ayah_start":257,"ayah_end":257,"confidence":0.9,"page":1,'
+      '"transcript":"اللَّهُ وَلِيُّ الَّذِينَ آمَنُوا"}',
     );
     await tester.pump();
     expect(container.read(readerControllerProvider)?.range.key, '2:255');
+    expect(find.byKey(const Key('voice-transcript')), findsNothing);
     await tester.tap(find.byKey(const Key('voice-pause-follow')));
     for (var attempt = 0; attempt < 20; attempt++) {
       await tester.runAsync(
@@ -449,10 +486,12 @@ void main() {
 
     sockets.single.emit(
       '{"type":"ayah","sequence":1,"revision":3,"surah":2,'
-      '"ayah_start":255,"ayah_end":255,"confidence":0.9,"page":42}',
+      '"ayah_start":255,"ayah_end":255,"confidence":0.9,"page":42,'
+      '"transcript":"stale transcript"}',
     );
     await tester.pump();
     expect(container.read(readerControllerProvider)?.range.key, '2:257');
+    expect(find.text('stale transcript'), findsNothing);
 
     sockets.single.emit(
       '{"type":"error","sequence":5,"code":"BACKPRESSURE"}',
@@ -463,6 +502,7 @@ void main() {
     await tester.pump();
     expect(captures.single.stopped, isTrue);
     expect(find.byKey(const Key('voice-retry')), findsOneWidget);
+    expect(find.byKey(const Key('voice-transcript')), findsNothing);
     await tester.tap(find.byKey(const Key('voice-retry')));
     for (var attempt = 0; attempt < 20; attempt++) {
       await tester.runAsync(
@@ -475,12 +515,164 @@ void main() {
       }
     }
     expect(sockets, hasLength(2));
+    callbacks.first({
+      'type': 'candidate',
+      'sequence': 99,
+      'transcript': 'delayed old session',
+    });
+    await tester.pump();
+    expect(find.byKey(const Key('voice-transcript')), findsNothing);
     expect(find.byKey(const Key('voice-pause-follow')), findsOneWidget);
     await tester.tap(find.byIcon(Icons.stop));
     await tester.runAsync(
       () async => Future<void>.delayed(const Duration(milliseconds: 50)),
     );
     await tester.pump();
+    expect(captures.last.stopped, isTrue);
+    expect(find.byKey(const Key('voice-status-strip')), findsNothing);
+  });
+
+  Future<void> waitForVoice(WidgetTester tester, Finder finder) async {
+    for (var attempt = 0; attempt < 30; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+      await tester.pump(const Duration(milliseconds: 30));
+      if (finder.evaluate().isNotEmpty) return;
+    }
+    expect(finder, findsOneWidget);
+  }
+
+  testWidgets('mic displays permission denial and connection failures', (
+    tester,
+  ) async {
+    for (final permitted in [false, true]) {
+      await pumpPage(
+        tester,
+        '/quran/page/42',
+        voiceFactory: (id, onEvent, onError) => LiveVoiceSession(
+          deviceId: id,
+          onEvent: onEvent,
+          onError: onError,
+          capture: _QuietCapture(permitted: permitted),
+          connect: (_, _) async => throw StateError('backend unavailable'),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('mushaf-voice-mic')));
+      await waitForVoice(tester, find.byKey(const Key('voice-retry')));
+      expect(find.byKey(const Key('voice-transcript')), findsNothing);
+      final l10n = AppLocalizations.of(
+        tester.element(find.byKey(const Key('voice-status'))),
+      );
+      expect(
+        find.text(
+          permitted ? l10n.voiceConnectFailed : l10n.voicePermissionDenied,
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    }
+  });
+
+  testWidgets('connecting mic can be stopped before the socket resolves', (
+    tester,
+  ) async {
+    final capture = _QuietCapture();
+    final gate = Completer<LiveVoiceSocket>();
+    var connected = false;
+    await pumpPage(
+      tester,
+      '/quran/page/42',
+      voiceFactory: (id, onEvent, onError) => LiveVoiceSession(
+        deviceId: id,
+        onEvent: onEvent,
+        onError: onError,
+        capture: capture,
+        connect: (_, _) {
+          connected = true;
+          return gate.future;
+        },
+      ),
+    );
+    await tester.tap(find.byKey(const Key('mushaf-voice-mic')));
+    for (var attempt = 0; attempt < 30 && !connected; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 30)),
+      );
+      await tester.pump();
+    }
+    expect(connected, isTrue);
+    await tester.pump();
+    expect(find.byIcon(Icons.stop), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.stop));
+    await tester.pump();
+    gate.complete(_EventSocket());
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump();
+    expect(capture.started, isFalse);
+    expect(capture.stopped, isTrue);
+    expect(find.byKey(const Key('voice-status-strip')), findsNothing);
+  });
+
+  testWidgets('background and disposal stop capture and clear the preview', (
+    tester,
+  ) async {
+    final captures = <_QuietCapture>[];
+    final sockets = <_EventSocket>[];
+    await pumpPage(
+      tester,
+      '/quran/page/42',
+      voiceFactory: (id, onEvent, onError) {
+        final capture = _QuietCapture();
+        captures.add(capture);
+        return LiveVoiceSession(
+          deviceId: id,
+          onEvent: onEvent,
+          onError: onError,
+          capture: capture,
+          connect: (_, _) async {
+            final socket = _EventSocket();
+            sockets.add(socket);
+            Future<void>.delayed(
+              Duration.zero,
+              () => socket.emit(
+                '{"type":"ready","sequence":0,"sample_rate":16000,"format":"pcm_s16le_mono"}',
+              ),
+            );
+            return socket;
+          },
+        );
+      },
+    );
+    await tester.tap(find.byKey(const Key('mushaf-voice-mic')));
+    await waitForVoice(tester, find.byKey(const Key('voice-pause-follow')));
+    sockets.last.emit(
+      '{"type":"candidate","sequence":1,"transcript":"اللَّهُ"}',
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('voice-transcript')), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    expect(captures.last.stopped, isTrue);
+    // Paused bindings do not draw frames; assert the cleared UI on return.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.byKey(const Key('voice-transcript')), findsNothing);
+    await tester.tap(find.byKey(const Key('mushaf-voice-mic')));
+    await waitForVoice(tester, find.byKey(const Key('voice-pause-follow')));
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     expect(captures.last.stopped, isTrue);
   });
 }

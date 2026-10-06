@@ -1,12 +1,12 @@
 # 10 — Security, Privacy & Licensing
 
-**Current content boundary:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md). Tanzil, EQuran, AlQuran.cloud, and Quran Foundation are legacy or deferred Qur'an sources and are not inputs to the new QUL-only build. Source-specific QUL redistribution evidence is still missing, so generated QUL archives, DBs, and fonts stay local and untracked. The separate Tarteel ASR model and non-Qur'an daily-needs providers remain.
+**Current content boundary:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md). QUL is the exclusive Qur'an content and font source. Source-specific QUL redistribution evidence is still missing, so generated QUL archives, DBs, and fonts stay local and untracked. The separate Tarteel ASR model and non-Qur'an daily-needs providers remain.
 
 ## 1. Threat model (summary)
 
 | Asset | Threat | Control |
 |---|---|---|
-| Quran Foundation client secret | Extraction from app binary | Secret only on BFF; app never calls QF directly |
+| External-provider credentials | Extraction from app binary | Credentials stay on BFF |
 | Voice recordings | Leakage / retention | In-memory processing, no disk writes, no logging of audio; TLS 1.2+ |
 | BFF compute (ASR is CPU-heavy) | Abuse / DoS | Per-device + per-IP rate limits, 2 MB / 30 s caps, WAF, Play Integrity / App Attest (Phase 2) |
 | Free upstream APIs | Our traffic overwhelming them → ban | Aggressive caching, single BFF egress, `User-Agent` with contact |
@@ -31,32 +31,28 @@
 ## 3. Secrets & infra
 
 - Secrets via secret manager → env vars; `.env` never committed (gitignore + `gitleaks` in CI).
-- Separate QF credentials for pre-live vs production.
+- Separate external-provider credentials by environment.
 - Containers run as non-root, read-only FS except `/tmp` (tmpfs), no outbound network except allow-listed providers.
 - Dependency scanning: `pip-audit`, `osv-scanner` for pub, Dependabot.
 
 ## 4. Content & model licensing — attribution screen (About → Sumber Data)
 
+The Makkah and Madinah photos in the Al-Qur'an Surah chooser were supplied by
+the app owner, who confirmed permission to use those exact images in Hafidz App.
+They are UI artwork, not Qur'an content or a QUL source. Retain the original
+asset files and the owner's rights confirmation with release records.
+
 | Source | License / terms (verify before release) | Obligation |
 |---|---|---|
-| Tanzil Qur'an text | CC BY 3.0; verbatim copies only — <https://tanzil.net/docs/text_license> | Credit "Tanzil Project", link tanzil.net, do not alter text |
-| Kemenag RI data via EQuran.id | Kemenag public data; equran.id states source quran.kemenag.go.id | Credit Kemenag RI + EQuran.id |
-| Quran Foundation / Quran.com API | Developer terms at api-docs.quran.foundation; production access requires approval | Follow QF terms, credit Quran.com, per-resource license for translations/tafsir |
-| AlQuran.cloud | Check site terms | Credit AlQuran.cloud / Islamic Network |
+| Prayer/du'a data via EQuran.id | Verify terms for these daily-needs resources | Credit the selected daily-needs providers |
 | Aladhan | Open source API | Credit AlAdhan.com |
 | myQuran API | Free community API | Credit api.myquran.com |
-| EveryAyah audio | Check terms per reciter | Credit EveryAyah.com and reciter names |
-| MP3Quran.net | Check terms | Credit MP3Quran.net |
 | Hadith (gading.dev, fawazahmed0) | Open-source repos; check upstream text licenses | Credit repos and original sources |
 | `tarteel-ai/whisper-base-ar-quran` | Apache-2.0 | Include license text + "Model by Tarteel AI" in About/OSS licenses |
 | OpenAI Whisper (base) | MIT | Include in OSS licenses |
-| Amiri Quran font (bundled) | SIL Open Font License | Include OFL text in OSS licenses |
-| QUL layout 15, V1 word glyphs 57, QPC V1 fonts 238 (planned) | Resource-specific terms unresolved; QUL availability is not a license grant | Pin rights/attribution evidence for each resource before redistribution; see §4.1 |
+| QUL canonical text/translation, layout 15, V1 word/ayah glyphs, QPC V1 fonts 238 | Resource-specific terms unresolved; QUL availability is not a license grant | Pin rights/attribution evidence for each resource before redistribution; see §4.1 |
 
-Amiri Quran 1.003 is bundled at `apps/mobile/assets/fonts/AmiriQuran.ttf` with
-its SIL Open Font License at `apps/mobile/assets/fonts/OFL.txt`. The license is
-registered with Flutter's license page. The About screen links to the font
-project and to the currently bundled Qur'an content sources.
+The supplied ayah-by-ayah QUL database is local-only and ignored by Git. Its exact archive and extracted SQLite hashes are recorded in docs/06. The Surah reader uses its glyph strings with the existing QPC page fonts. Canonical text remains QUL Uthmani.
 
 Action item before public release: legal review of each row (especially translations, tafsir, and audio
 redistribution for offline download).
@@ -71,7 +67,7 @@ The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
 Their public descriptions were checked on 2026-09-30. Local downloads were audited on 2026-10-01 and pinned in
 [`qul_1405h_source_manifest.json`](../tools/build_quran_db/qul_1405h_source_manifest.json). None of the three
 archives includes a license file. Resource-specific redistribution permission remains unverified; the files are
-kept in an ignored local cache and are not bundled in the app.
+kept in ignored local assets for development builds; they must not be redistributed without permission.
 
 The [QUL FAQ](https://qul.tarteel.ai/faq) says licenses and attribution obligations vary by resource, including
 for commercial use. QUL's [MIT-licensed CMS code](https://github.com/TarteelAI/quranic-universal-library) does not
@@ -93,7 +89,7 @@ verified. Any later image-based alternative requires its own matching-source, ge
 
 - Qur'an text is never generated or altered by AI. The AI only **locates** ayat; semantic text comes from licensed,
   verbatim sources. The planned Mushaf uses separately verified, licensed QUL V1 presentation glyphs/fonts while
-  list mode, copy/share and accessibility text retain canonical Tanzil text.
+  Surah mode uses QUL ayah glyphs; copy/share and accessibility retain canonical QUL Uthmani.
 - Planned print QA must preserve source line structure, special opening pages, headings, basmallahs and end markers.
   A tap/highlight must resolve to the correct canonical ayah without reflowing or substituting generic glyphs.
   Reference comparisons and release checks are specified in docs/09 §6 and remain incomplete.

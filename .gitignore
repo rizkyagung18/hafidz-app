@@ -22,6 +22,7 @@ services/api/eval/output/
 services/api/eval/golden-v1/audio/
 apps/mobile/assets/db/*.sqlite
 apps/mobile/assets/db/*.sha256
+apps/mobile/assets/db/qpc-v1-ayah-by-ayah-glyphs.db
 apps/mobile/assets/fonts/MeQuran.ttf
 apps/mobile/assets/mushaf/manifest.json
 apps/mobile/assets/mushaf/pages/*.json

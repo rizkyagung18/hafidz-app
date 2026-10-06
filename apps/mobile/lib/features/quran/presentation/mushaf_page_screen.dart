@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hafidz_app/core/database/quran_database.dart';
 import 'package:hafidz_app/core/device/device_id_provider.dart';
 import 'package:hafidz_app/core/persistence/persistence_providers.dart';
+import 'package:hafidz_app/core/theme/app_theme.dart';
 import 'package:hafidz_app/features/quran/data/reading_repository.dart';
 import 'package:hafidz_app/features/quran/domain/ayah_range.dart';
 import 'package:hafidz_app/features/quran/domain/ayah_ref.dart';
@@ -96,7 +97,8 @@ class QuranPageScreen extends ConsumerStatefulWidget {
   ConsumerState<QuranPageScreen> createState() => _QuranPageScreenState();
 }
 
-class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
+class _QuranPageScreenState extends ConsumerState<QuranPageScreen>
+    with WidgetsBindingObserver {
   late final PageController _pages;
   Timer? _saveTimer;
   late int _currentPage;
@@ -111,10 +113,12 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
   LiveVoiceMessage? _latestStableAyah;
   String? _voiceMessage;
   String? _voiceFailureCode;
+  String? _voiceTranscript;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentPage = widget.page;
     _pages = PageController(
       initialPage: widget.page.clamp(1, mushafPageCount) - 1,
@@ -143,7 +147,18 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      unawaited(_stopListening());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _voiceTranscript = null;
     _saveTimer?.cancel();
     _sessionEpoch++;
     if (_live != null) unawaited(_live!.stop());
@@ -165,6 +180,7 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
       _followPaused = false;
       _voiceMessage = null;
       _voiceFailureCode = null;
+      _voiceTranscript = null;
     });
     late final LiveVoiceSession session;
     session = ref.read(liveVoiceSessionFactoryProvider)(
@@ -183,6 +199,10 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
       final header = await ref.read(
         mushafPageHeaderProvider(_currentPage).future,
       );
+      if (!mounted || epoch != _sessionEpoch || !identical(_live, session)) {
+        await session.stop();
+        return;
+      }
       await session.start(hintSurah: header.surah);
       if (!mounted || !identical(_live, session)) {
         await session.stop();
@@ -200,6 +220,7 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
         _listening = false;
         _live = null;
         _voiceFailureCode = _failureCode(error);
+        _voiceTranscript = null;
       });
     }
   }
@@ -217,16 +238,24 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
         _listening = false;
         _voiceMessage = null;
         _voiceFailureCode = failureCode;
+        _voiceTranscript = null;
+        _latestStableAyah = null;
+        _followPaused = false;
       });
     }
     await session?.stop();
   }
 
   void _onVoiceEvent(Map<String, dynamic> event, int epoch) {
-    if (!mounted) return;
+    if (!mounted || epoch != _sessionEpoch) return;
     final message = LiveVoiceMessage.parse(event);
     if (message == null || message.sequence <= _lastVoiceSequence) return;
     _lastVoiceSequence = message.sequence;
+    if (_latestStableAyah == null &&
+        const {'candidate', 'ambiguous'}.contains(message.type) &&
+        (message.transcript?.trim().isNotEmpty ?? false)) {
+      setState(() => _voiceTranscript = message.transcript!.trim());
+    }
     if (message.type == 'error') {
       unawaited(_stopListening(failureCode: message.code));
     } else if (message.type == 'candidate' || message.type == 'ambiguous') {
@@ -240,7 +269,10 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
       _lastStableRevision = message.revision!;
       _latestAyahSequence = message.sequence;
       _latestStableAyah = message;
-      setState(() => _voiceMessage = null);
+      setState(() {
+        _voiceMessage = null;
+        _voiceTranscript = null;
+      });
       if (!_followPaused) unawaited(_followAyah(message, epoch));
     }
   }
@@ -455,6 +487,33 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
     context.go(uri.toString());
   }
 
+  String _voiceStatus(AppLocalizations l10n) {
+    if (_connecting) return l10n.voiceConnecting;
+    if (_voiceFailureCode != null) {
+      return switch (_voiceFailureCode) {
+        'MIC_PERMISSION_DENIED' => l10n.voicePermissionDenied,
+        'BACKPRESSURE' => l10n.voiceStreamBusy,
+        'SESSION_EXPIRED' => l10n.voiceSessionExpired,
+        'INFERENCE_FAILED' => l10n.voiceInferenceFailed,
+        _ => l10n.voiceConnectFailed,
+      };
+    }
+    if (_followPaused) return l10n.voiceFollowPaused;
+    return _voiceMessage ?? l10n.voiceListening;
+  }
+
+  Widget _micButton(AppLocalizations l10n) => FloatingActionButton(
+    key: const Key('mushaf-voice-mic'),
+    tooltip: _connecting || _listening ? l10n.voiceStop : l10n.voiceTitle,
+    shape: const CircleBorder(),
+    backgroundColor: const Color(0xFF58D99A),
+    foregroundColor: Colors.white,
+    onPressed: _connecting || _listening
+        ? () => unawaited(_stopListening())
+        : () => unawaited(_startListening()),
+    child: Icon(_connecting || _listening ? Icons.stop : Icons.mic),
+  );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -557,86 +616,107 @@ class _QuranPageScreenState extends ConsumerState<QuranPageScreen> {
         top: false,
         child: ColoredBox(
           color: const Color(0xFFF7F3E8),
-          child: SizedBox(
-            height: 72,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                TextButton.icon(
-                  key: const Key('mushaf-page-jump'),
-                  onPressed: _showJump,
-                  icon: const Icon(Icons.menu_book_outlined, size: 18),
-                  label: Text(
-                    '${l10n.quranPageTitle(_currentPage)} / $mushafPageCount',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_connecting || _listening || _voiceFailureCode != null)
+                Padding(
+                  key: const Key('voice-status-strip'),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _voiceStatus(l10n),
+                              key: const Key('voice-status'),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF174C3F),
+                              ),
+                            ),
+                            if (_voiceTranscript != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.voiceRecognitionPreview,
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                              SizedBox(
+                                width: double.infinity,
+                                child: Text(
+                                  _voiceTranscript!,
+                                  key: const Key('voice-transcript'),
+                                  textDirection: TextDirection.rtl,
+                                  textAlign: TextAlign.right,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontFamily: AppTheme.arabicFontFamily,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                    color: Color(0xFF64716A),
+                                    height: 1.8,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            if (_listening)
+                              TextButton(
+                                key: const Key('voice-pause-follow'),
+                                onPressed: _toggleFollow,
+                                child: Text(
+                                  _followPaused
+                                      ? l10n.voiceResumeFollow
+                                      : l10n.voicePauseFollow,
+                                ),
+                              ),
+                            if (_voiceFailureCode != null)
+                              TextButton(
+                                key: const Key('voice-retry'),
+                                onPressed: () => unawaited(_startListening()),
+                                child: Text(l10n.voiceRetry),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _micButton(l10n),
+                    ],
                   ),
                 ),
-                Positioned(
-                  right: 16,
-                  top: 8,
-                  child: FloatingActionButton(
-                    tooltip: l10n.voiceTitle,
-                    shape: const CircleBorder(),
-                    backgroundColor: const Color(0xFF58D99A),
-                    foregroundColor: Colors.white,
-                    onPressed: _connecting
-                        ? null
-                        : _listening
-                        ? () => unawaited(_stopListening())
-                        : () => unawaited(_startListening()),
-                    child: Icon(_listening ? Icons.stop : Icons.mic),
-                  ),
+              SizedBox(
+                width: double.infinity,
+                height: _connecting || _listening || _voiceFailureCode != null
+                    ? 36
+                    : 72,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    TextButton.icon(
+                      key: const Key('mushaf-page-jump'),
+                      onPressed: _showJump,
+                      icon: const Icon(Icons.menu_book_outlined, size: 18),
+                      label: Text(
+                        '${l10n.quranPageTitle(_currentPage)} / $mushafPageCount',
+                      ),
+                    ),
+                    if (!_connecting &&
+                        !_listening &&
+                        _voiceFailureCode == null)
+                      Positioned(
+                        right: 16,
+                        top: 8,
+                        child: _micButton(l10n),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
-      // bottomSheet: _connecting || _listening || _voiceFailureCode != null
-      //     ? SafeArea(
-      //         child: Padding(
-      //           padding: const EdgeInsets.fromLTRB(16, 8, 96, 8),
-      //           child: Row(
-      //             children: [
-      //               Icon(
-      //                 _listening ? Icons.graphic_eq : Icons.connecting_airports,
-      //               ),
-      //               const SizedBox(width: 12),
-      //               Expanded(
-      //                 child: Text(
-      //                   _connecting
-      //                       ? l10n.voiceConnecting
-      //                       : _voiceFailureCode == 'MIC_PERMISSION_DENIED'
-      //                       ? l10n.voicePermissionDenied
-      //                       : _voiceFailureCode == 'BACKPRESSURE'
-      //                       ? l10n.voiceStreamBusy
-      //                       : _voiceFailureCode != null
-      //                       ? l10n.voiceConnectFailed
-      //                       : _followPaused
-      //                       ? l10n.voiceFollowPaused
-      //                       : _voiceMessage ?? l10n.voiceListening,
-      //                 ),
-      //               ),
-      //               if (_listening)
-      //                 TextButton(
-      //                   key: const Key('voice-pause-follow'),
-      //                   onPressed: _toggleFollow,
-      //                   child: Text(
-      //                     _followPaused
-      //                         ? l10n.voiceResumeFollow
-      //                         : l10n.voicePauseFollow,
-      //                   ),
-      //                 ),
-      //               if (_voiceFailureCode != null)
-      //                 TextButton(
-      //                   key: const Key('voice-retry'),
-      //                   onPressed: () => unawaited(_startListening()),
-      //                   child: Text(l10n.voiceRetry),
-      //                 ),
-      //             ],
-      //           ),
-      //         ),
-      //       )
-      //     : null,
       body: Directionality(
         textDirection: TextDirection.ltr,
         child: PageView.builder(

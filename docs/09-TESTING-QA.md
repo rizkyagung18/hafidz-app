@@ -24,6 +24,19 @@ Reducing context to three seconds improved that by only about 0.1 seconds, so
 the four-second context was retained for a fuller matching signal. Human
 recitation latency on the simulator still needs the post-tuning retest.
 
+**Recognition-preview follow-up (2026-10-06):** The full Python suite passes (73 tests and 53 subtests),
+Ruff and mypy pass, and the full Flutter suite passes (59 tests) with no analyzer issues. Backend checks cover
+raw transcript delivery before stability, empty windows, the 1,000-character cap, one ASR call per window,
+ordered events, unchanged stabilization, PCM wiping and disconnect cleanup. Mobile checks cover optional
+transcripts, cancellation while connecting/waiting for ready, visible permission/connection failures, Retry,
+preview-only events without navigation, latest nonempty text, stale sequence/session rejection, local page
+42 → 43 follow, Pause/Resume, Stop, backgrounding, and disposal. Four older Surah-reader assertions were
+aligned with the previously approved QPC ayah-glyph presentation; reader product code was unchanged.
+The local API health endpoint and a real WebSocket `ready → stopped` handshake pass. The current build runs
+on iPhone 17 Pro Simulator (iOS 26.0), with the microphone outside the print canvas. Actual human-recitation
+preview timing and page transition, plus simulator connection-loss/Retry observation, are pending. No new
+latency or accuracy figure is claimed. Audio and transcripts remain in memory only.
+
 ## 1. Test pyramid
 
 | Layer | Tooling | Scope | Gate |
@@ -43,7 +56,7 @@ Version everything (`golden-v1`, `golden-v2`…); store audio in object storage,
 
 | Subset | Size | How to build | Purpose |
 |---|---|---|---|
-| `clean-full` | 600 | Random ayat (stratified by length: short < 40 chars, medium, long > 300) from 4+ EveryAyah reciters (e.g. Alafasy_128kbps, Husary_128kbps, Abdul_Basit_Murattal_192kbps, Minshawy_Murattal_128kbps) | Baseline |
+| `clean-full` | 600 | Random ayat (stratified by length: short < 40 chars, medium, long > 300) from 4+ selected QUL reciters (resource selection pending) | Baseline |
 | `clean-partial` | 400 | 3–10 s random slices of long ayat | Fragment matching |
 | `span` | 300 | Concatenate 2–3 consecutive ayah files | Range detection |
 | `noisy` | 400 | `clean-*` + MUSAN/café noise at SNR 10 dB and 5 dB, + reverb | Robustness |
@@ -52,9 +65,7 @@ Version everything (`golden-v1`, `golden-v2`…); store audio in object storage,
 | `negative` | 150 | Non-Qur'an Arabic speech (du'a, hadith, khutbah), Indonesian speech, music, silence | False-positive control |
 | `ambiguous` | 50 | Repeated refrains (55:13 etc.), basmala-only, muqatta'at | Ambiguity handling |
 
-Public references: EveryAyah files (<https://everyayah.com/recitations_ayat.html>), the Tarteel dataset paper
-(<https://openreview.net/pdf?id=TAdzPkgnnV8>), HF dataset `Rdyh/everyayah` (ayah-aligned recitations). Check each
-dataset's license before redistribution; keep derived clips internal.
+Qur'an recitation resources must come from selected QUL sources, or consented volunteer recordings used for evaluation. No QUL audio corpus has been selected yet; the golden set remains empty. Retain source rights or consent evidence before collecting clips.
 
 ### Evaluation harness
 
@@ -128,7 +139,7 @@ T-M04 tests establish prototype navigation behavior, not print fidelity.
   to a canonical ayah. Validate source end-marker records explicitly; do not assume every glyph record is a spoken word.
 - Preserve source-driven opening-page line counts, centered lines, surah headings and basmallah handling.
   Do not require 15 occupied rows on every page or synthesize duplicate basmallahs/end markers.
-- Confirm matching page-font coverage without fallback glyphs. Canonical Tanzil text and global ayah IDs must be
+- Confirm matching page-font coverage without fallback glyphs. Canonical QUL Uthmani text and global ayah IDs must be
   unchanged; QUL word IDs and glyph codes must never become bookmark identifiers or substitutes for canonical semantic text.
 
 ### 6.2 Print fidelity and interaction

@@ -115,7 +115,7 @@ requires device evidence and redistribution rights.
 1. Load the edition's page, ordered line rows, glyph tokens, and exact page font from local assets.
 2. Lay out a page in a fixed design coordinate system. Preserve each source line's token order and centered or
    justified alignment. Establish page margins, baselines, and title treatment against approved references.
-   Never ask a paragraph widget to discover line breaks or substitute Amiri for missing V1 glyph fonts.
+   Never ask a paragraph widget to discover line breaks or substitute a generic font for missing V1 glyph fonts.
 3. Shape each line with its matching font. Keep token-to-UTF-16-span mappings, including ligatures and end markers;
    do not assume one code point equals one word. Obtain selection boxes from the same shaped line.
 4. Group token boxes by canonical ayah, preserving separate segments for different lines. These boxes drive both

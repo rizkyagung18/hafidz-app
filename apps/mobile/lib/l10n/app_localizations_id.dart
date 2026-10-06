@@ -40,6 +40,48 @@ class AppLocalizationsId extends AppLocalizations {
   String get quranChooseReader => 'Buka surah';
 
   @override
+  String get quranLibrarySubtitle => 'Baca, pahami, dan dekatkan hati.';
+
+  @override
+  String get quranHeaderBismillah => 'بِسْمِ اللَّهِ';
+
+  @override
+  String get quranBrand => 'Hafidz';
+
+  @override
+  String get quranSearchAction => 'Cari surah';
+
+  @override
+  String get quranClearSearch => 'Hapus pencarian';
+
+  @override
+  String get quranSearchHint => 'Cari nomor atau nama surah...';
+
+  @override
+  String get quranSearchJuzHint => 'Cari nomor juz...';
+
+  @override
+  String get quranSurahTab => 'Surah';
+
+  @override
+  String get quranJuzTab => 'Juz';
+
+  @override
+  String get quranSearchEmpty => 'Tidak ada surah yang cocok.';
+
+  @override
+  String get quranJuzEmpty => 'Tidak ada juz yang cocok.';
+
+  @override
+  String get quranJuzUnavailable => 'Halaman awal juz tidak tersedia.';
+
+  @override
+  String get quranMushafChoice => 'Baca Mushaf';
+
+  @override
+  String get quranTranslationChoice => 'Terjemahan';
+
+  @override
   String get quranTranslationReader => 'Surah & Terjemahan';
 
   @override
@@ -164,6 +206,10 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get quranShowTranslation => 'Terjemahan';
+
+  @override
+  String get quranMarkerUnavailable =>
+      'Penanda nomor ayat tidak tersedia. Teks ayat tetap dapat dibaca.';
 
   @override
   String get quranPlayAyah => 'Putar ayat';
@@ -353,4 +399,19 @@ class AppLocalizationsId extends AppLocalizations {
 
   @override
   String get errorUpstream => 'Layanan sementara tidak tersedia.';
+
+  @override
+  String get quranGlyphUnavailable =>
+      'Huruf ayat QPC tidak tersedia. Menampilkan teks Arab QUL yang dapat dibaca.';
+
+  @override
+  String get voiceRecognitionPreview => 'Bacaan yang dikenali · dapat berubah';
+
+  @override
+  String get voiceSessionExpired =>
+      'Sesi mendengarkan berakhir. Ketuk Coba lagi untuk melanjutkan.';
+
+  @override
+  String get voiceInferenceFailed =>
+      'Pengenalan suara gagal. Silakan coba lagi.';
 }

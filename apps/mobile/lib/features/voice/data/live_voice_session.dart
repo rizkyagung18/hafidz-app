@@ -136,6 +136,7 @@ class LiveVoiceSession {
   Future<void>? _drainTask;
   Future<void>? _stopTask;
   Timer? _expiry;
+  Completer<void>? _ready;
   bool _stopping = false;
   bool _failed = false;
 
@@ -145,6 +146,7 @@ class LiveVoiceSession {
       if (!await _capture.hasPermission()) {
         throw const LiveVoiceFailure('MIC_PERMISSION_DENIED');
       }
+      if (_stopping) throw const LiveVoiceFailure('VOICE_DISCONNECTED');
       final base = Uri.parse(apiBaseUrl);
       final uri = base.replace(
         scheme: base.scheme == 'https' ? 'wss' : 'ws',
@@ -154,12 +156,19 @@ class LiveVoiceSession {
             : {'hint_surah': '$hintSurah'},
       );
       final ready = Completer<void>();
-      final socket = await _connect(uri, deviceId).timeout(
-        const Duration(seconds: 10),
-      );
+      final socket = await _connect(uri, deviceId)
+          .then((socket) {
+            // A connection may complete after Stop or after its timeout.
+            if (_stopping) unawaited(socket.close());
+            return socket;
+          })
+          .timeout(const Duration(seconds: 10));
+      if (_stopping) throw const LiveVoiceFailure('VOICE_DISCONNECTED');
       _socket = socket;
+      _ready = ready;
       _socketSubscription = socket.messages.listen(
         (message) {
+          if (_stopping) return;
           if (message is! String) {
             _fail(const LiveVoiceFailure('INVALID_SERVER_EVENT'));
             return;
@@ -192,10 +201,17 @@ class LiveVoiceSession {
           _fail(error);
         },
       );
-      await ready.future.timeout(const Duration(seconds: 10));
+      try {
+        await ready.future.timeout(const Duration(seconds: 10));
+      } finally {
+        _ready = null;
+      }
       if (_stopping) throw const LiveVoiceFailure('VOICE_DISCONNECTED');
       final audio = await _capture.start();
-      if (_stopping) throw const LiveVoiceFailure('VOICE_DISCONNECTED');
+      if (_stopping) {
+        await _capture.stop();
+        throw const LiveVoiceFailure('VOICE_DISCONNECTED');
+      }
       _audioSubscription = audio.listen(_onPcm, onError: _fail);
       _expiry = Timer(const Duration(seconds: 180), () {
         _fail(const LiveVoiceFailure('SESSION_EXPIRED'));
@@ -251,6 +267,10 @@ class LiveVoiceSession {
 
   Future<void> _stop() async {
     _stopping = true;
+    final ready = _ready;
+    if (ready != null && !ready.isCompleted) {
+      ready.completeError(const LiveVoiceFailure('VOICE_DISCONNECTED'));
+    }
     _expiry?.cancel();
     await _audioSubscription?.cancel();
     try {

@@ -117,6 +117,37 @@ void main() {
     }
   });
 
+  test('preview text is optional, raw, and bounded in Unicode characters', () {
+    const text = 'اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ';
+    for (final type in ['candidate', 'ambiguous']) {
+      final message = LiveVoiceMessage.parse({
+        'type': type,
+        'sequence': 1,
+        'transcript': text,
+      });
+      expect(message?.transcript, text);
+      expect(message?.range, isNull);
+    }
+    for (final invalid in [123, 'ا' * 1001]) {
+      expect(
+        LiveVoiceMessage.parse({
+          'type': 'candidate',
+          'sequence': 1,
+          'transcript': invalid,
+        }),
+        isNull,
+      );
+    }
+    expect(
+      LiveVoiceMessage.parse({
+        'type': 'candidate',
+        'sequence': 1,
+        'transcript': '',
+      })?.transcript,
+      '',
+    );
+  });
+
   test('capture begins after ready and sends only fixed PCM frames', () async {
     final capture = FakeCapture();
     final socket = FakeSocket();
@@ -228,5 +259,50 @@ void main() {
     expect(errors, hasLength(1));
     expect((errors.single as LiveVoiceFailure).code, 'VOICE_DISCONNECTED');
     expect(capture.stopped, isTrue);
+  });
+  test(
+    'Stop while connecting closes a late socket without starting capture',
+    () async {
+      final capture = FakeCapture();
+      final socket = FakeSocket();
+      final gate = Completer<LiveVoiceSocket>();
+      final session = LiveVoiceSession(
+        deviceId: 'test-device',
+        onEvent: (_) {},
+        onError: (_) {},
+        capture: capture,
+        connect: (_, _) => gate.future,
+      );
+      final starting = session.start();
+      final failure = expectLater(starting, throwsA(isA<LiveVoiceFailure>()));
+      await Future<void>.delayed(Duration.zero);
+      await session.stop();
+      gate.complete(socket);
+      await failure;
+      expect(socket.closed, isTrue);
+      expect(capture.started, isFalse);
+      expect(capture.disposed, isTrue);
+    },
+  );
+
+  test('Stop while waiting for ready cancels startup immediately', () async {
+    final capture = FakeCapture();
+    final socket = FakeSocket();
+    final session = LiveVoiceSession(
+      deviceId: 'test-device',
+      onEvent: (_) {},
+      onError: (_) {},
+      capture: capture,
+      connect: (_, _) async => socket,
+    );
+    final failure = expectLater(
+      session.start(),
+      throwsA(isA<LiveVoiceFailure>()),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await session.stop();
+    await failure;
+    expect(socket.closed, isTrue);
+    expect(capture.started, isFalse);
   });
 }

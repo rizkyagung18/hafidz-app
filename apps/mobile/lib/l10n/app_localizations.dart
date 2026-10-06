@@ -158,6 +158,90 @@ abstract class AppLocalizations {
   /// **'Buka surah'**
   String get quranChooseReader;
 
+  /// No description provided for @quranLibrarySubtitle.
+  ///
+  /// In id, this message translates to:
+  /// **'Baca, pahami, dan dekatkan hati.'**
+  String get quranLibrarySubtitle;
+
+  /// No description provided for @quranHeaderBismillah.
+  ///
+  /// In id, this message translates to:
+  /// **'بِسْمِ اللَّهِ'**
+  String get quranHeaderBismillah;
+
+  /// No description provided for @quranBrand.
+  ///
+  /// In id, this message translates to:
+  /// **'Hafidz'**
+  String get quranBrand;
+
+  /// No description provided for @quranSearchAction.
+  ///
+  /// In id, this message translates to:
+  /// **'Cari surah'**
+  String get quranSearchAction;
+
+  /// No description provided for @quranClearSearch.
+  ///
+  /// In id, this message translates to:
+  /// **'Hapus pencarian'**
+  String get quranClearSearch;
+
+  /// No description provided for @quranSearchHint.
+  ///
+  /// In id, this message translates to:
+  /// **'Cari nomor atau nama surah...'**
+  String get quranSearchHint;
+
+  /// No description provided for @quranSearchJuzHint.
+  ///
+  /// In id, this message translates to:
+  /// **'Cari nomor juz...'**
+  String get quranSearchJuzHint;
+
+  /// No description provided for @quranSurahTab.
+  ///
+  /// In id, this message translates to:
+  /// **'Surah'**
+  String get quranSurahTab;
+
+  /// No description provided for @quranJuzTab.
+  ///
+  /// In id, this message translates to:
+  /// **'Juz'**
+  String get quranJuzTab;
+
+  /// No description provided for @quranSearchEmpty.
+  ///
+  /// In id, this message translates to:
+  /// **'Tidak ada surah yang cocok.'**
+  String get quranSearchEmpty;
+
+  /// No description provided for @quranJuzEmpty.
+  ///
+  /// In id, this message translates to:
+  /// **'Tidak ada juz yang cocok.'**
+  String get quranJuzEmpty;
+
+  /// No description provided for @quranJuzUnavailable.
+  ///
+  /// In id, this message translates to:
+  /// **'Halaman awal juz tidak tersedia.'**
+  String get quranJuzUnavailable;
+
+  /// No description provided for @quranMushafChoice.
+  ///
+  /// In id, this message translates to:
+  /// **'Baca Mushaf'**
+  String get quranMushafChoice;
+
+  /// No description provided for @quranTranslationChoice.
+  ///
+  /// In id, this message translates to:
+  /// **'Terjemahan'**
+  String get quranTranslationChoice;
+
   /// No description provided for @quranTranslationReader.
   ///
   /// In id, this message translates to:
@@ -391,6 +475,12 @@ abstract class AppLocalizations {
   /// In id, this message translates to:
   /// **'Terjemahan'**
   String get quranShowTranslation;
+
+  /// No description provided for @quranMarkerUnavailable.
+  ///
+  /// In id, this message translates to:
+  /// **'Penanda nomor ayat tidak tersedia. Teks ayat tetap dapat dibaca.'**
+  String get quranMarkerUnavailable;
 
   /// No description provided for @quranPlayAyah.
   ///
@@ -733,6 +823,30 @@ abstract class AppLocalizations {
   /// In id, this message translates to:
   /// **'Layanan sementara tidak tersedia.'**
   String get errorUpstream;
+
+  /// No description provided for @quranGlyphUnavailable.
+  ///
+  /// In id, this message translates to:
+  /// **'Huruf ayat QPC tidak tersedia. Menampilkan teks Arab QUL yang dapat dibaca.'**
+  String get quranGlyphUnavailable;
+
+  /// No description provided for @voiceRecognitionPreview.
+  ///
+  /// In id, this message translates to:
+  /// **'Bacaan yang dikenali · dapat berubah'**
+  String get voiceRecognitionPreview;
+
+  /// No description provided for @voiceSessionExpired.
+  ///
+  /// In id, this message translates to:
+  /// **'Sesi mendengarkan berakhir. Ketuk Coba lagi untuk melanjutkan.'**
+  String get voiceSessionExpired;
+
+  /// No description provided for @voiceInferenceFailed.
+  ///
+  /// In id, this message translates to:
+  /// **'Pengenalan suara gagal. Silakan coba lagi.'**
+  String get voiceInferenceFailed;
 }
 
 class _AppLocalizationsDelegate

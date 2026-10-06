@@ -77,6 +77,8 @@ before accepting audio. The client then sends ordered binary PCM16LE mono frames
 Server JSON events have increasing `sequence`: `candidate`, `ayah`, `ambiguous`,
 `error`, and `stopped`. A stable `ayah` also has an increasing session-local
 `revision`, `surah`, `ayah_start`, `ayah_end`, and `confidence` in 0..1.
+Result events (`candidate`, `ambiguous`, and `ayah`) may include `transcript`: the latest unnormalized ASR window text, capped at 1,000 Unicode characters. It is an ephemeral recognition preview, not canonical Qur'an text or a correctness verdict. Empty strings are allowed; mobile retains its latest nonempty preview until the first stable ayah, then hides it for the rest of the session. Older clients may ignore the additive field. No additional inference is performed.
+
 `candidate` and `ambiguous` never move the reader. The optional response `page`
 is informational; mobile resolves the canonical ayah range against its installed
 QUL edition. Errors end the session: `INVALID_PCM_FRAME`, `INVALID_COMMAND`,
@@ -107,14 +109,7 @@ These endpoints are unimplemented roadmap placeholders. If implemented during th
 | `GET /v1/quran/search?q=&lang=id&limit=20` | Text search (Arabic normalized or translation) | 1 d |
 | `GET /v1/quran/db/manifest` | `{version, sha256, url, size}` of latest offline DB bundle | 1 h |
 
-`GET /v1/quran/reciters` response item:
-
-```json
-{"id":"alafasy","name":"Mishary Rashid Alafasy","style":"murattal",
- "ayah_url_template":"https://everyayah.com/data/Alafasy_128kbps/{sss}{aaa}.mp3",
- "surah_url_template":"https://cdn.equran.id/audio-full/Misyari-Rasyid-Al-Afasi/{sss}.mp3",
- "fallback_ayah_url_template":"https://cdn.equran.id/audio-partial/Misyari-Rasyid-Al-Afasi/{sss}{aaa}.mp3"}
-```
+`GET /v1/quran/reciters` remains deferred until a QUL recitation resource and its rights are selected. No external audio fallback URL templates are configured.
 
 ### 2.3 Prayer times
 

@@ -40,6 +40,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quranChooseReader => 'Open surah';
 
   @override
+  String get quranLibrarySubtitle => 'Read, understand, and draw closer.';
+
+  @override
+  String get quranHeaderBismillah => 'بِسْمِ اللَّهِ';
+
+  @override
+  String get quranBrand => 'Hafidz';
+
+  @override
+  String get quranSearchAction => 'Search surahs';
+
+  @override
+  String get quranClearSearch => 'Clear search';
+
+  @override
+  String get quranSearchHint => 'Search by surah number or name...';
+
+  @override
+  String get quranSearchJuzHint => 'Search by juz number...';
+
+  @override
+  String get quranSurahTab => 'Surah';
+
+  @override
+  String get quranJuzTab => 'Juz';
+
+  @override
+  String get quranSearchEmpty => 'No matching surah.';
+
+  @override
+  String get quranJuzEmpty => 'No matching juz.';
+
+  @override
+  String get quranJuzUnavailable =>
+      'The start page for this juz is unavailable.';
+
+  @override
+  String get quranMushafChoice => 'Read Mushaf';
+
+  @override
+  String get quranTranslationChoice => 'Translation';
+
+  @override
   String get quranTranslationReader => 'Surah & Translation';
 
   @override
@@ -164,6 +207,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get quranShowTranslation => 'Translation';
+
+  @override
+  String get quranMarkerUnavailable =>
+      'The ayah number ornament is unavailable. The ayah text is still readable.';
 
   @override
   String get quranPlayAyah => 'Play ayah';
@@ -353,4 +400,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorUpstream => 'Service temporarily unavailable.';
+
+  @override
+  String get quranGlyphUnavailable =>
+      'QPC ayah lettering is unavailable. Showing readable QUL Arabic text.';
+
+  @override
+  String get voiceRecognitionPreview => 'Recognized recitation · may change';
+
+  @override
+  String get voiceSessionExpired =>
+      'Listening session ended. Tap Retry to continue.';
+
+  @override
+  String get voiceInferenceFailed => 'Voice recognition failed. Try again.';
 }

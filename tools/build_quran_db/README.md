@@ -4,7 +4,7 @@ This builder produces QUL-only `quran.sqlite` v3 with semantic Qur'an content an
 
 ## Inputs
 
-Place the supplied QUL archives at their paths in `sources.lock.json`, under the ignored `tools/build_quran_db/.cache/` directory. Keep the original archives. The builder verifies every hash and fails if a file is missing or changed. It does not download sources or use Tanzil, AlQuran.cloud, or EQuran fallbacks. Do not commit or distribute the archives, generated database, index, or fonts until resource-specific redistribution rights are established.
+Place the supplied QUL archives at their paths in `sources.lock.json`, under the ignored `tools/build_quran_db/.cache/` directory. Keep the original archives. The builder verifies every hash and fails if a file is missing or changed. It uses only the supplied pinned QUL sources, without external content fallbacks. Do not commit or distribute the archives, generated database, index, or fonts until resource-specific redistribution rights are established.
 
 The print staging command also needs the QPC V1 page-font archive, the user-supplied QUL font ZIPs for the Surah header, top-left Surah name, and Juz/common glyphs, the pinned `surah_name_v1.ttf`, and the Surah header ligature map. All are listed in the locks. Install HarfBuzz's `hb-view` CLI locally to rasterize each color-font Surah header into a transparent PNG. Inspect or audit sources with `audit_qul_1405h.py` before staging. The staged mobile print pack is ignored by Git.
 
@@ -29,3 +29,5 @@ uv run --project services/api python -m unittest tools.build_quran_db.test_audit
 ```
 
 GitHub CI runs those source-independent tests and Dart source analysis. Full database, index, print, Flutter analysis, and reader tests run locally while the QUL resources remain untracked. Do not interpret a green CI result as a verified content build.
+
+The Surah reader additionally uses the supplied `qpc-v1-ayah-by-ayah-glyphs.db` as a local presentation asset. Extract it into `apps/mobile/assets/db/` using the command in docs/06. It does not replace canonical QUL Uthmani or rebuild the ASR index. Its exact checksum is pinned by the glyph loader.

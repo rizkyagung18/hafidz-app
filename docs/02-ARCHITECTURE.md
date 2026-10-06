@@ -6,7 +6,7 @@
 
 - **Offline-first mobile client** with a bundled Qur'an database.
 - **Backend-for-Frontend (BFF)** in FastAPI that (a) hosts the ASR + ayah-matching AI service, (b) proxies and caches
-  third-party Islamic APIs, (c) hides secrets (Quran Foundation OAuth2 client credentials).
+  third-party Islamic APIs, (c) hides secrets (external-provider credentials).
 - Stateless services, horizontally scalable; Redis for cache and rate limiting.
 
 ## 2. Context diagram (C4 level 1)
@@ -15,12 +15,12 @@
 flowchart LR
   U[User] -->|voice, taps| M[Hafidz App Mobile<br/>Flutter]
   M -->|HTTPS JSON / multipart| B[Hafidz App BFF + AI Service<br/>FastAPI]
-  B --> QF[Quran Foundation<br/>Content API v4]
-  B --> EQ[EQuran.id API v2<br/>Kemenag data]
+  QUL[QUL pinned local content/fonts] -->|build and package| M
+  B --> EQ[EQuran.id<br/>Prayer and du'a]
   B --> MQ[myQuran API<br/>Jadwal Sholat Kemenag]
   B --> AL[Aladhan API<br/>prayer / hijri / qibla]
   B --> HD[Hadith API gading.dev]
-  M -->|direct CDN audio streaming| AU[Audio CDNs<br/>EveryAyah / equran CDN / mp3quran]
+  QUL -.->|future selected QUL recitations| AU[Murattal — deferred]
   B --> HF[(Hugging Face Hub<br/>model download at build time)]
 ```
 
@@ -104,7 +104,7 @@ sequenceDiagram
 | Matching | Custom n-gram + rapidfuzz alignment over bundled Qur'an | Deterministic, explainable, no extra model; handles ASR errors | ADR-003 |
 | BFF | FastAPI + Pydantic v2 | Python shares runtime with ASR; OpenAPI auto-generated | ADR-002 |
 | Cache | Redis | TTL cache for provider responses, token cache, rate limit | — |
-| Offline Qur'an | Bundled SQLite (Tanzil Uthmani + metadata + Kemenag translation) | Offline-first, fast navigation, deterministic page mapping | ADR-004 |
+| Offline Qur'an | Pinned QUL SQLite (Uthmani, metadata, Indonesian translation) | Offline-first, fast navigation, deterministic page mapping | ADR-004 |
 | Mushaf presentation (planned) | QUL 1405H fixed lines + V1 word glyphs + matching page fonts | Reproduce the selected print with pressable ayat; preserve canonical text separately | ADR-006 |
 | Prayer (ID) | equran.id / myQuran (Kemenag) + on-device `adhan` calc fallback (KEMENAG params) | Official Indonesian schedule; works offline | ADR-005 |
 
@@ -147,8 +147,7 @@ flowchart LR
 - Sizing (starting point): 2 vCPU / 2 GB RAM per pod, `WEB_CONCURRENCY=1`, ASR thread pool = 2 workers per pod
   (`cpu_threads=1` each). Scale on CPU > 60 % or p95 latency > 1.5 s.
 - GPU is **not** required for whisper-base; add a GPU pool only if migrating to larger Tarteel models.
-- Environments: `dev` (docker-compose), `staging`, `prod`. Quran Foundation uses **pre-live** credentials in dev/staging
-  and **production** credentials in prod (docs/04 §1).
+- Environments: `dev` (docker-compose), `staging`, `prod`; content and fonts come from pinned local QUL resources.
 
 ## 7. Cross-cutting concerns
 

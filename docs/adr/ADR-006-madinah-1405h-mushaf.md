@@ -7,7 +7,7 @@
 
 ## Context
 
-The T-M04 prototype groups verbatim ayat by page and draws paragraphs in Amiri Quran. It preserves semantic text
+The T-M04 prototype groups verbatim ayat by page and draws Unicode paragraphs. It preserves semantic text
 and supports navigation, but changes line breaks and visual positions. The user requires the Madinah 1405H
 printed appearance and pressable ayat. Page numbers alone cannot provide that result.
 

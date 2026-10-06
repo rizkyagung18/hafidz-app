@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -44,6 +45,62 @@ class PrintPage {
 
   final int number;
   final List<PrintLine> lines;
+}
+
+/// Presentation-only ending glyph; never use it for canonical text or speech.
+class AyahEndMarker {
+  const AyahEndMarker({required this.glyph, required this.page});
+
+  final String glyph;
+  final int page;
+
+  String get fontFamily => 'QPCPage$page';
+}
+
+Future<AyahEndMarker> readAyahEndMarker(QuranDatabase db, AyahRef ref) async {
+  final row = await db
+      .customSelect(
+        'SELECT w.glyph,w.page FROM ayah a '
+        'JOIN mushaf_ayah_page p ON p.ayah_id=a.id '
+        'JOIN mushaf_word w ON w.edition_id=p.edition_id AND w.id=p.last_word_id '
+        'WHERE a.surah=? AND a.ayah=? AND p.edition_id=? '
+        'AND w.ayah_id=a.id AND w.page=p.page '
+        'ORDER BY p.page DESC LIMIT 1',
+        variables: [
+          Variable<int>(ref.surah),
+          Variable<int>(ref.ayah),
+          const Variable<String>('madinah-1405h-qpc-v1'),
+        ],
+      )
+      .getSingleOrNull();
+  if (row == null || row.read<String>('glyph').isEmpty) {
+    throw FormatException('Missing QUL ending marker for ${ref.key}');
+  }
+  return AyahEndMarker(
+    glyph: row.read<String>('glyph'),
+    page: row.read<int>('page'),
+  );
+}
+
+Future<AyahEndMarker> loadAyahEndMarker(
+  QuranDatabase db,
+  AyahRef ref, {
+  Directory? packDirectory,
+}) async {
+  final marker = await readAyahEndMarker(db, ref);
+  final manifest = await _loadManifest(db, packDirectory);
+  await _ensurePageFont(db, marker.page, manifest, packDirectory);
+  return marker;
+}
+
+/// Load the existing verified page font for the reflowing glyph reader.
+Future<void> loadQpcPageFont(
+  QuranDatabase db,
+  int page, {
+  Directory? packDirectory,
+}) async {
+  final manifest = await _loadManifest(db, packDirectory);
+  await _ensurePageFont(db, page, manifest, packDirectory);
 }
 
 Future<Uint8List> _loadAsset(String path, Directory? packDirectory) async {
@@ -135,7 +192,6 @@ Future<void> _ensureFonts(
   final v1 = await verified('surah_name_v1.ttf');
   final v2 = await verified('surah-name-v2.ttf');
   final header = await verified('QCF_SurahHeader_COLOR-Regular.ttf');
-  final pageHash = await verified('p$page.ttf');
   _loadedAuxiliaryFonts ??= () async {
     await _loadVerifiedFont(
       'quran-common.ttf',
@@ -162,13 +218,41 @@ Future<void> _ensureFonts(
       packDirectory,
     );
   }();
-  _loadedPageFonts[page] ??= _loadVerifiedFont(
-    'p$page.ttf',
+  await Future.wait([
+    _loadedAuxiliaryFonts!,
+    _ensurePageFont(db, page, manifest, packDirectory),
+  ]);
+}
+
+Future<void> _ensurePageFont(
+  QuranDatabase db,
+  int page,
+  Map<String, dynamic> manifest,
+  Directory? packDirectory,
+) async {
+  if (page < 1 || page > 604) throw RangeError.range(page, 1, 604);
+  final file = 'p$page.ttf';
+  final hash = await _assetHash(
+    db,
+    'font:$file',
+    'fonts/$file',
+    (manifest['font_sha256'] as Map<String, dynamic>)[file] as String,
+  );
+  final loading = _loadedPageFonts[page] ??= _loadVerifiedFont(
+    file,
     'QPCPage$page',
-    pageHash,
+    hash,
     packDirectory,
   );
-  await Future.wait([_loadedAuxiliaryFonts!, _loadedPageFonts[page]!]);
+  try {
+    await loading;
+  } on Object catch (_) {
+    // A missing/corrupt local asset must not poison later retry attempts.
+    if (identical(_loadedPageFonts[page], loading)) {
+      unawaited(_loadedPageFonts.remove(page));
+    }
+    rethrow;
+  }
 }
 
 Future<PrintPage> loadPrintPage(

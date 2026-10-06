@@ -42,6 +42,8 @@ Notes / caveats:
 
 ### 2.1 Conversion script (`tools/convert_model/convert.py`)
 
+Optional `--verify-audio` uses a supplied local QUL `--audio-file` with a canonical `--ayah` key (default `1:2`). The expected Arabic is read from the pinned QUL database; no third-party recitation is downloaded.
+
 ```python
 """Convert tarteel-ai/whisper-base-ar-quran to CTranslate2 int8 for faster-whisper."""
 from pathlib import Path
@@ -318,7 +320,7 @@ the first page; the reader auto-scrolls to show the start of the highlight.
 
 ## 8. Evaluation plan (summary — full detail in docs/09)
 
-- Golden set ≥ 2,000 clips: EveryAyah per-ayah recordings (multiple reciters), sliced fragments (partial ayah, 2–3 ayah
+- Golden set ≥ 2,000 clips: selected QUL per-ayah recordings (source/rights selection pending), sliced fragments (partial ayah, 2–3 ayah
   spans), noisy augmentations (café noise at SNR 10/5 dB, phone-speaker re-recording), and ≥ 300 real user recordings
   (consented) from Indonesian reciters.
 - Metrics: ASR WER/CER (normalized), top-1 / top-3 ayah accuracy, range exact-match & IoU, false-auto-navigate rate

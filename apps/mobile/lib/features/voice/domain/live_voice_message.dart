@@ -9,6 +9,7 @@ class LiveVoiceMessage {
     this.revision,
     this.range,
     this.code,
+    this.transcript,
   });
 
   final String type;
@@ -16,6 +17,7 @@ class LiveVoiceMessage {
   final int? revision;
   final AyahRange? range;
   final String? code;
+  final String? transcript;
 
   static LiveVoiceMessage? parse(Map<String, dynamic> json) {
     final type = json['type'];
@@ -29,6 +31,11 @@ class LiveVoiceMessage {
       'error',
       'stopped',
     }.contains(type)) {
+      return null;
+    }
+    final transcript = json['transcript'];
+    if (transcript != null &&
+        (transcript is! String || transcript.runes.length > 1000)) {
       return null;
     }
     if (type == 'ayah') {
@@ -56,6 +63,7 @@ class LiveVoiceMessage {
         type: type,
         sequence: sequence,
         revision: revision,
+        transcript: transcript as String?,
         range: AyahRange(
           start: AyahRef(surah: surah, ayah: start),
           end: AyahRef(surah: surah, ayah: end),
@@ -67,6 +75,7 @@ class LiveVoiceMessage {
       type: type,
       sequence: sequence,
       code: json['code'] is String ? json['code'] as String : null,
+      transcript: transcript as String?,
     );
   }
 }

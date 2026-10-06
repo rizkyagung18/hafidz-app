@@ -25,12 +25,9 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 - AC: `docker compose up` serves `GET /healthz → 200`; both CI workflows green.
 
 **T-F02 Qur'an DB builder** — deps: T-F01
-- `tools/build_quran_db/build.py`: download pinned Tanzil Uthmani + Simple Clean, alquran.cloud `quran-uthmani`
-  (for page/juz/hizb/ruku/manzil/sajda), equran.id v2 surat 1..114 (Latin + Indonesian) and tafsir; write
-  `apps/mobile/assets/db/quran.sqlite` using schema docs/06 §1; populate FTS5.
-- `verify.py` implements every invariant in docs/06 §1.
-- `sources.lock.json` pins URLs + SHA-256; build is reproducible (same inputs ⇒ same DB hash).
-- Cross-check AlQuran.cloud page/juz data against full-Qur'an Tanzil metadata; range-check its hizb-quarter data because Tanzil metadata has no hizb-quarter boundaries. A Quran Foundation full-Qur'an check is optional after production access is approved because pre-live only includes surahs 1–2.
+- `tools/build_quran_db/build.py`: import pinned local QUL Uthmani, Imlaei Simple, Indonesian translation, metadata, and 1405H mapping; write `apps/mobile/assets/db/quran.sqlite` and populate FTS5. Current implementation supersedes the original pre-QUL source plan.
+- `verify.py` checks source hashes, canonical key coverage, page/Juz/Hizb/Sajda mapping, and all invariants in docs/06.
+- `sources.lock.json` pins QUL archive SHA-256 identities; same inputs produce the same DB hash.
 - AC: invariants pass; `2:255 → page 42`; DB ≤ 25 MB.
 
 **T-F02-QUL QUL content migration** — deps: T-F02, T-F04, T-M02; active replacement task
@@ -52,7 +49,7 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 
 **T-F05 Model conversion** — deps: T-F01
 - `tools/convert_model/convert.py` per docs/03 §2.1; Dockerfile stage that runs it and copies output to `/models`.
-- AC: faster-whisper loads the dir; transcribing EveryAyah `Alafasy_128kbps/001002.mp3` yields text whose
+- AC: faster-whisper loads the dir; transcribing a supplied local QUL 1:2 clip yields text whose
   normalized form has ratio ≥ 90 vs `الحمد لله رب العالمين`.
 
 ## M1 — AI core
@@ -93,6 +90,13 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 - Use warm cream, forest green, and muted gold outside the source-faithful Mushaf canvas. The mic FAB appears only on the Mushaf screen; Belajar is a clearly labeled Hafalan preview.
 - AC: routes and deep links remain valid, four tabs and Surah actions work, and no Home/Qibla tab or mic control outside Mushaf remains.
 
+**T-M01-R2 Al-Qur'an library redesign** — deps: T-M01-R1, T-M02
+- Status: implemented from the user-supplied Figma screenshot; dark visual direction adapts to light and sepia without changing the default preference.
+- Surah list uses QUL names, Arabic names, ayah counts and revelation places. Search by number, Latin name or Arabic name; show a responsive empty state. Juz 1–30 opens the actual start page from the local database. Riwayat and Surah meanings remain deferred.
+- The photo chooser uses the user-supplied Makkah/Madinah assets and offers only Baca Mushaf and Terjemahan. The shared bottom bar retains Al-Qur'an, Sholat, Belajar, Lainnya; Kiblat remains in Lainnya.
+- AC: 114 Surahs and 30 Juz are reachable offline; chooser actions preserve existing routes; search, dark/light/sepia, small/large layouts, and bottom navigation work; the Mushaf and its sole visible mic are unchanged.
+- Verification: focused Surah and shell widget checks pass, and the app launches on iOS Simulator. The full Flutter suite still has an existing Mushaf live-voice test failure because its pause/retry control is currently commented out; T-M01-R2 does not change that reader.
+
 **T-M02 Local DB layer** — deps: T-F02, T-M01
 - drift definitions for `quran.sqlite` (read-only, copied from assets with version check) and `user.sqlite`.
 - Repositories: `QuranRepository` (surahs, ayah by key, page, juz, search), `BookmarkRepository`, `ReadingRepository`.
@@ -100,6 +104,17 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 
 **T-M03 Surah list & list reader** — deps: T-M02
 - AC: PRD F-02 AC1, AC3; smooth scrolling 60 fps through Al-Baqarah (286 ayat).
+
+**T-M03-R1 Surah and translation reader redesign** — deps: T-M01-R2, T-M03
+- Status: redesign and QPC ayah-by-ayah follow-up implemented. Earlier marker-only reader/app-shell checks passed; widget checks for the new full-glyph presentation have not been rerun. Changed-file analysis is clean; full Flutter analysis reports three existing unused Mushaf voice members, outside this reader.
+- Add a right-to-left, scrollable 114-Surah top selector. Tap or swipe changes the selected Surah, updates `/quran/surah/:n`, and starts at ayah 1; direct `?ayah=` links retain their requested initial position.
+- Present QUL Arabic and optional Indonesian translation in flat reading rows with theme-aware paper/gold styling. Keep bookmark, copy, share, and reading-position behavior; remove the unavailable visible play action. Do not change the printed Mushaf.
+- Keep the tab strip mounted across loading states and center only when selection/data changes. Put digits-only ayah numbers at bottom left. Add QUL-based Bismillah openings except At-Tawbah; render Al-Fatihah 1:1 once as an opening without a badge, preserving all canonical IDs and later numbers.
+- Remove the metadata row above Bismillah; move translation visibility to the toolbar. Add exact QUL ending ornaments to regular Arabic ayat using each final segment's verified page font, while retaining footer digits and canonical text. Marker failure must not block reading.
+- Regression checks cover retained tab state through pending data, no recenter on translation changes, a three-digit ayah badge, opening text identity, and the At-Tawbah exception. Reader analysis is clean.
+- Marker verification: all 6,236 ayat have nonempty terminal glyphs and valid print pages. Tests check markers 1, 10, 255, and 286, synthetic cross-page terminal selection, lazy font requests, and readable fallback on missing assets. The 21 reader/navigation tests and three focused print regressions pass; analysis of the changed Dart files is clean.
+- Follow-up approved 2026-10-05: replace Surah-reader Arabic presentation with the supplied QUL QPC V1 ayah-by-ayah SQLite strings and matching page fonts. Endings are included once; opening Bismillah omits its numbered ending visually. Keep canonical QUL text for copy/share/search/accessibility and preserve the printed Mushaf. Prior marker-only checks above describe the preceding implementation.
+- AC: Surahs 1, 2, and 114, navigation and back, deep ayah links, long scrolling, translation settings and ayah actions work on small and large screens in light, dark, and sepia.
 
 **T-M04 Mushaf page reader + highlight** — deps: T-M02
 - Status: **reopened for redesign, 2026-09-30**. Existing flowing-text prototype is retained, but does not meet
@@ -162,7 +177,7 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
   only after this evidence is recorded. Do not implement T-M05 or T-D05 as part of these reader tasks.
 
 **T-M05 Voice Ayah Finder UI** — deps: T-M04-R5, T-A04
-- Status: live capture, bounded framing, stable range follow, pause/resume, retry, and automated widget/transport
+- Status: recognition-preview/recovery code and automated checks complete (2026-10-06); simulator human-recitation and connection-loss proof pending. Restored the visible status/pause/retry UI. Earlier live capture, bounded framing, stable range follow, pause/resume, retry, and automated widget/transport
   tests implemented locally. On an iOS Simulator, live recitation followed Al-Baqarah 2:256 → 2:257 and turned
   page 42 → 43; the first pass took more than five seconds. A shorter inference cadence is implemented and its
   simulator retest is pending. Physical iPhone validation is deferred by user; T-M04-R5 checks are also deferred.
@@ -171,13 +186,15 @@ Each task is sized for one coding-agent session (≈ 1 PR). Give the agent the t
 - AC: a session can keep listening, follow successive ayat across page boundaries, pause/stop, recover from
   disconnect, and avoid unstable jumps on repeated ayat. No raw audio persistence; device integration proof.
 
+- Preview/recovery AC: recognized Arabic appears in small (14 px), regular-weight muted text before the first stable match, then clears and stays hidden for that session, including while follow is paused. It also clears on Stop/background/disposal/error. Connecting can be cancelled; permission/connection/server failures offer localized feedback and Retry. Verify real audio and network loss on iOS Simulator.
+
 **T-A06 Live Voice Finder backend** — deps: T-A04, T-F02-QUL
-- Status: bounded WebSocket, worker limit, stable-event protocol, cleanup and simulated streaming tests implemented
+- Status: additive raw-transcript preview implemented and automated checks passed (2026-10-06). Bounded WebSocket, worker limit, stable-event protocol, cleanup and simulated streaming tests implemented
   locally. Real streaming latency/accuracy remain unmeasured while the consented golden set is empty.
 - Add bounded WebSocket `/v1/voice/live` with ordered PCM chunks, rolling ASR windows, continuity/hysteresis,
   stable canonical ayah events, explicit backpressure, disconnect cleanup, and rate/connection limits (docs/12).
 - AC: protocol, cleanup, bounded-memory, repeated-ayah, and simulated streaming tests pass. Report measured live
-  latency/accuracy only after a nonempty consented streaming golden set exists.
+  human-recitation latency only from observed sessions; accuracy requires a nonempty consented streaming golden set.
 
 **T-M06 Share-to-app audio** — deps: T-M05
 - Android intent filter + iOS share extension; transcode to 16 kHz mono (e.g. `ffmpeg_kit_flutter_min` or native) and

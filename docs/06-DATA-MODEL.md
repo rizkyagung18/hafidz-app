@@ -1,6 +1,6 @@
 # 06 — Data Model
 
-**Current target:** QUL-only `quran.sqlite` v3 extends the implemented v2 semantic content with the Madinah 1405H print records in §1.1. The older v1 SQL in §1 is retained as migration history only; its Tanzil/EQuran sources and required Latin, tafsir, Surah meanings, and hizb-quarter fields are not current contracts. The exact semantic SQL is `tools/build_quran_db/build.py` and `apps/mobile/lib/core/database/quran_schema.drift`.
+**Current target:** QUL-only `quran.sqlite` v3 extends the implemented v2 semantic content with the Madinah 1405H print records in §1.1. The older v1 SQL in §1 is retained as migration history only; its former content sources and required Latin, tafsir, Surah meanings, and hizb-quarter fields are not current contracts. The exact semantic SQL is `tools/build_quran_db/build.py` and `apps/mobile/lib/core/database/quran_schema.drift`.
 
 Two SQLite databases on device (drift), plus an in-memory index on the server.
 
@@ -26,7 +26,7 @@ The Madinah 1405H print records are specified below. `user.sqlite` remains indep
 
 ```sql
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- rows: db_version, built_at, tanzil_version, sources_json, sha256
+-- rows: db_version, built_at, source_revision, sources_json, sha256
 
 CREATE TABLE surah (
   number            INTEGER PRIMARY KEY,          -- 1..114
@@ -51,12 +51,12 @@ CREATE TABLE ayah (
   ruku          INTEGER,
   manzil        INTEGER,
   sajda         INTEGER NOT NULL DEFAULT 0,
-  text_uthmani  TEXT NOT NULL,                    -- VERBATIM Tanzil Uthmani — never modified
-  text_simple   TEXT NOT NULL,                    -- VERBATIM Tanzil Simple Clean
+  text_uthmani  TEXT NOT NULL,                    -- VERBATIM QUL Uthmani — never modified
+  text_simple   TEXT NOT NULL,                    -- VERBATIM QUL Imlaei Simple
   text_norm     TEXT NOT NULL,                    -- normalize_ar(text_simple) — search only, never displayed
-  text_latin    TEXT,                             -- Kemenag transliteration (equran teksLatin)
-  translation_id TEXT NOT NULL,                   -- Kemenag Indonesian (equran teksIndonesia)
-  translation_en TEXT,                            -- optional (e.g. Saheeh International via Quran Foundation, check license)
+  text_latin    TEXT,                             -- deferred; null in the QUL-only corpus
+  translation_id TEXT NOT NULL,                   -- verbatim pinned QUL Indonesian translation
+  translation_en TEXT,                            -- deferred until a QUL source is selected
   UNIQUE (surah, ayah)
 );
 CREATE INDEX ix_ayah_page ON ayah(page);
@@ -107,8 +107,8 @@ CREATE TABLE prayer_location (   -- Indonesian kab/kota for offline picker + rev
 Build invariants (checked by `tools/build_quran_db/verify.py`, CI fails otherwise):
 - `COUNT(ayah) = 6236`, `COUNT(surah) = 114`, `MAX(page) = 604`, `MAX(juz) = 30`.
 - Sum of `surah.ayah_count` = 6236; each `(surah, ayah)` contiguous from 1.
-- `page` and `juz` from alquran.cloud equal the corresponding full-Qur'an boundaries in Tanzil `quran-data.xml` for all ayat (cross-source check). Tanzil metadata has no hizb-quarter boundaries; alquran.cloud supplies `hizbQuarter`, which is range-checked (1..240). Quran Foundation pre-live only exposes surahs 1–2, so a full-Qur'an Quran Foundation page comparison is an optional release check after production access is approved.
-- SHA-256 of Tanzil source files matches the pinned value in `tools/build_quran_db/sources.lock.json`.
+- `page` and `juz` come from audited QUL mappings; optional divisions remain absent unless a QUL source has been supplied.
+- SHA-256 of QUL source archives matches the pinned value in `tools/build_quran_db/sources.lock.json`.
 - Spot checks: `2:255 → page 42, juz 3`; `1:1 → page 1`; `114:6 → page 604`; `18:1 → juz 15`.
 
 ## 1.1 Madinah 1405H presentation data, schema v3
@@ -171,7 +171,7 @@ geometry cache is keyed by edition, pack version, font hash, and layout profile;
 - Every canonical ayah has complete rendering membership, including all segments and its numbered end marker.
   Preserve Al-Fatihah's numbered basmala and separate unnumbered basmala rows; At-Tawbah has no added basmala.
 - Fonts cover every used glyph and match the pinned edition/page. Missing fonts, missing glyphs, mixed revisions,
-  or unknown line/token kinds fail verification; no fallback to another print or Amiri.
+  or unknown line/token kinds fail verification; no fallback to another print or generic font.
 - Canonical text hashes and IDs stay unchanged; existing v1 semantic invariants still pass. Compare the full
   1405H page map with legacy metadata and retain the comparison report even if all boundaries agree.
 - Spot checks include pages 1, 2, 42 (2:253–256), 48 (2:282), 121 (5:77–82), 187 (9:1–6), and 604, confirmed
@@ -314,3 +314,13 @@ class QuranIndex:
     word_to_ayat: dict[str, set[int]]
     ayah_meta: dict[tuple[int, int], AyahMeta]   # page, juz, names
 ```
+
+### Surah reader presentation database (2026-10-05)
+
+The local-only asset `apps/mobile/assets/db/qpc-v1-ayah-by-ayah-glyphs.db` is extracted unchanged from the owner-supplied QUL ZIP. Its `verses(id, verse_key, surah, ayah, text, page_number)` table has all 6,236 canonical ayat. `text` contains the exact QPC V1 ayah glyph string, including its ending ornament; `page_number` selects the existing matching font. Join by `verse_key`, never row order. This sidecar changes no canonical schema, content version, user database, or ASR index. Runtime verifies its pinned SHA-256, reads it once off the UI thread, closes SQLite, and retains only the glyph lookup.
+
+- ZIP SHA-256: `3e18dc1d5152358fb253d8e3183253ffb3c79f1f9f1e27d0fa21872f66eda3c0`
+- SQLite SHA-256: `04c5d8f1df4f694983bbb4acfd9cd3c4a5f7f0a007927372ad9b6148bd1b9fa0`
+- Restore locally: `unzip -p /path/to/qpc-v1-ayah-by-ayah-glyphs.db.zip qpc-v1-ayah-by-ayah-glyphs.db > apps/mobile/assets/db/qpc-v1-ayah-by-ayah-glyphs.db`
+
+Canonical `ayah.text_uthmani` remains the source for copying, sharing, search, and accessibility. Glyph strings are presentation data only. The supplied source assigns one page to every ayah; future multi-page exports require explicit segments rather than guessing a font.

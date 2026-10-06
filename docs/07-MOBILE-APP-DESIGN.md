@@ -1,18 +1,26 @@
 # 07 — Mobile App Design (Flutter)
 
-**Current target:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) supersedes the old five-tab, Home microphone, Latin/tafsir, and one-shot-only UI descriptions below. The next shell has four tabs, opens on the Surah list, and places one live Voice Finder FAB outside the printed Mushaf page.
+**Current target:** [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md) governs the QUL content and live Voice Finder contract. The app opens on the Surah list; the Mushaf alone has a visible live Voice Finder FAB.
 
 ## 1. Information architecture
 
-Bottom navigation (5 tabs):
+Bottom navigation (4 tabs):
 
 | Tab | Route | Content |
 |---|---|---|
-| Beranda (Home) | `/` | Next-prayer countdown card, Hijri + Gregorian date, **Voice Ayah Finder big mic button**, last read, ayat of the day, quick tiles (Qibla, Doa, Tasbih, Hadith, Asmaul Husna) |
-| Al-Qur'an | `/quran` | Surah / Juz / Bookmarks tabs; search; mic FAB |
+| Al-Qur'an | `/quran` | Surah list and Juz starts, local search, two-action Surah chooser |
 | Sholat | `/prayer` | Today's times, month view, adzan settings, location |
-| Kiblat | `/qibla` | Compass |
-| Lainnya (More) | `/more` | Doa, Hadith, Asmaul Husna, Tasbih, Hijri calendar, Settings, About & Attribution |
+| Belajar | `/learning` | Hafalan preview |
+| Lainnya (More) | `/more` | Kiblat, Doa, Asmaul Husna, Tasbih, Hijri calendar, Settings, About & Attribution |
+
+`/` redirects to `/quran`. The `/qibla` deep link remains available from Lainnya.
+
+### Al-Qur'an library and chooser
+
+- The Surah list uses the local QUL database for all 114 names, Arabic names, ayah counts, revelation places, and first pages. Search matches number, Latin name, or Arabic name. The subtitle shows ayah count and Makkiyah/Madaniyah; Surah meanings remain hidden.
+- The Juz control lists 1–30 and resolves each start page through the local QUL Juz-to-ayah mapping. It opens that page directly. Riwayat is deferred until persistent reading history exists; no inactive control is displayed.
+- Tapping a Surah opens a centered photo chooser. The user-supplied Makkah and Madinah photos follow its revelation place. Only `Baca Mushaf` (the existing first-page route) and `Terjemahan` (the existing list-reader route) are offered. Murattal remains deferred.
+- The dark design follows the approved Figma screenshot. Light and sepia adapt the same layout to their existing theme preferences; the app's default theme remains light. The chooser and library do not change printed Mushaf styling or its mic.
 
 ## 2. Routes & deep links (go_router)
 
@@ -53,15 +61,15 @@ server error, or connection loss stops capture. Errors offer Retry, while
 permission denial explains how to grant microphone access. See [docs/12](12-QUL-CORE-AND-LIVE-VOICE.md)
 and [docs/05 §2.1a](05-BACKEND-API-SPEC.md) for transport and event fields.
 
+### Live recognition strip
+
+The Mushaf mic opens a compact bottom strip beside the Stop mic, outside the print canvas. Show connecting/listening/error states, the latest nonempty Arabic recognition text before the first stable match (RTL, Me Quran font at 14 logical pixels, regular weight, muted gray-green, at most three display lines), and a localized “may change” label. Pause/Resume follow and Retry remain visible where applicable. Keep page information at the bottom. Clear and hide the recognition text and its label on the first stable ayah event, even when follow is paused; later preview events keep it hidden until a new session starts. Listening, Stop, and Pause/Resume remain available. Preview updates never turn pages; only stable validated ayah revisions do. Stop is available during connection as well as listening. Backgrounding, leaving the reader, Stop, or a failed session closes capture and clears the preview. The print renderer and source lines are unchanged.
+
 ## 4. Qur'an reader
 
 ### 4.1 Mushaf status and target
 
-The existing T-M04 prototype renders verbatim ayat as flowing Amiri Quran text grouped by page. It supports
-navigation and highlight, but its printed appearance is **not accepted**. The following replacement is planned
-under T-M04-R1–R5; no new renderer, QUL assets or database migration is implemented by this documentation revision.
-The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
-[ADR-006](adr/ADR-006-madinah-1405h-mushaf.md) replace the previous v1/v2 rendering choices.
+The current local v3 renderer uses QUL KFGQPC V1 fixed lines, word glyphs, and matching page fonts. The user has accepted the visual direction; the deferred offline/performance checks remain on the roadmap. The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and [ADR-006](adr/ADR-006-madinah-1405h-mushaf.md) define print fidelity.
 
 - **Print source:** use QUL layout 15 (KFGQPC V1, Madinah 1405H) with matching word glyphs 57 and page fonts 238.
   Use the source's ordered line membership, alignment, headings and basmallah rows. Ordinary pages have the
@@ -69,7 +77,7 @@ The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
   Preserve the numbered Al-Fatihah basmala, separate unnumbered basmallahs and source end markers without duplication.
 - **Fixed page:** render glyphs in a fixed page coordinate system, retaining the print's word positions, page
   proportions and prescribed lines. Fit the complete page by default. Pinch zoom and pan enlarge the same page;
-  text scaling must not wrap words onto new lines. Missing page fonts produce an asset error, not Amiri fallback.
+  text scaling must not wrap words onto new lines. Missing page fonts produce an asset error, not a generic font fallback.
 - **Current local proof on tall phones:** use the available page height as extra leading between the 15 prescribed
   lines, keeping their order, glyph aspect ratio and horizontal shaping intact. Keep the eight-line opening pages
   compact until their decorative frame and final reference geometry are approved. Size the QPC word glyphs to
@@ -108,14 +116,15 @@ The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
 - Auto-save the canonical last-read ayah on page change (debounced one second). Preserve `user.sqlite` during the
   planned content-v2 rebuild and recompute derived pages through the active edition.
 
-### 4.3 List mode (existing)
+### 4.3 Surah and translation reader
 
-- `ScrollablePositionedList.builder` per surah loads ayat from the bundled database and builds only
-  visible cards. `/quran/surah/:n?ayah=:a` positions the requested ayah. Each card shows verbatim Uthmani text in
-  the bundled Amiri Quran font (RTL), plus optional Kemenag Latin text and Indonesian translation. The switches use
-  `show_latin` and `show_translation` in `user.sqlite.kv_setting`. Bookmark, share, copy, and Kemenag tafsir actions
-  work offline; the play button shows an availability message until T-D05 adds murottal playback.
-- Long-press ayah → action sheet. The independent list reader retains adjustable text and its existing reading-position behavior.
+- `/quran/surah/:n?ayah=:a` positions the requested ayah. A horizontally scrollable top strip shows all 114 QUL Surah names in right-to-left order, centers the selected Surah, and marks it with a gold underline. Tapping a tab or swiping the reading area changes Surah and starts at ayah 1. The route changes with the selection; a direct ayah link still opens its requested position.
+- `ScrollablePositionedList.builder` loads only the selected Surah's ayat and builds visible rows. Rows use flat, spacious styling with the supplied QUL QPC V1 ayah-by-ayah glyph strings and their matching page fonts, followed by QUL Indonesian translation when `show_translation` is enabled. Canonical QUL Uthmani stays separate for copy/share/search and accessibility. Do not display Latin transliteration, tafsir, or Surah meanings.
+- Bookmark, copy, and share remain visible actions; long press exposes the same actions. No unavailable playback button or unidentified screenshot controls appear. Existing reading-position and translation-setting persistence remain.
+- Light and sepia use warm paper, dark ink, and muted gold; dark mode adapts the same layout for contrast. The 1405H printed Mushaf and its microphone remain separate and unchanged.
+- The tab strip stays mounted during Surah loading and only recenters when selection or name data changes. Ayah footers show regular digits (1, 2, 3) at bottom left with the working actions at right.
+- There is no metadata row between the tabs and Bismillah. The toolbar translation toggle persists `show_translation`. Each regular ayah string already includes its Arabic numbered ornament; do not append a second marker. Only built rows request their matching page fonts. If glyph assets fail, show a localized warning with readable canonical QUL text. Al-Fatihah's opening has no ornament.
+- Show the opening Bismillah above the ayat using QUL 1:1 glyphs, omitting only their terminal number ornament visually; its accessibility label remains canonical QUL text. At-Tawbah has no added opening. Al-Fatihah presents its canonical 1:1 as a centered opening with translation/actions but no number badge or duplicate text; subsequent ayat retain source numbers 2–7. Other Surah openings have no artificial ayah identity. Direct links, copy/share, bookmarks, and reading position retain canonical IDs.
 
 ## 5. Murottal player
 
@@ -144,10 +153,11 @@ The [redesign plan](11-MUSHAF-1405H-REDESIGN.md) and
 
 | Token | Value |
 |---|---|
-| Primary | Emerald `#0F766E` (light) / `#2DD4BF` (dark) |
-| Accent | Gold `#B08D57` |
-| Surfaces | Light `#FAFAF7`, Sepia `#F5EEDC`, Dark `#0B1416` |
-| Arabic font — list/details | Bundled Amiri Quran 1.003; default 28 sp, range 20–44 |
+| Library teal | `#0F766E`; dark-mode active text `#2DD4BF` |
+| Library gold | `#B08D57` |
+| Dark library | Background `#0B1416`, card `#122326`, border `#243638`, text `#F5F6EF`, muted `#A0B2B2` |
+| Other themes | Existing warm cream `#F7F3E8`, forest green `#174C3F`, and sepia preference remain |
+| Arabic font — list/details | QUL QPC V1 matching page fonts in Surah reader; Me Quran for semantic fallback/details |
 | Mushaf font — planned | Exact QPC V1 font for each 1405H page, matched to its glyph data; source line layout and whole-page scaling |
 | Latin font | Inter / Plus Jakarta Sans |
 | Radius | 16 cards, 28 sheets |
@@ -158,8 +168,7 @@ fixed page coordinates; generic paragraph wrapping and the list-mode font-size p
 
 ## 9. i18n
 
-`flutter_localizations` + ARB files `app_id.arb` (default), `app_en.arb`. Never hardcode UI strings. Surah names:
-Latin + Indonesian meaning from DB, not ARB.
+`flutter_localizations` + ARB files `app_id.arb` (default), `app_en.arb`. Never hardcode UI strings. Surah names and revelation metadata come from the local QUL database; Indonesian Surah meanings are deferred.
 
 ## 10. Permissions
 
@@ -174,4 +183,4 @@ Latin + Indonesian meaning from DB, not ARB.
 
 1. Language (Bahasa Indonesia / English).
 2. Location (GPS or pick city) → shows today's schedule preview.
-3. Notifications & adzan preference → Home.
+3. Notifications & adzan preference → Al-Qur'an Surah list.

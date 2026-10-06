@@ -57,7 +57,7 @@ qibla compass, Hijri calendar, daily du'a, hadith, asmaul husna, tasbih, bookmar
   app/routers/{voice,quran,prayer,hadith,doa,health}.py
   app/asr/{model.py,audio.py}
   app/matching/{normalize.py,index.py,matcher.py}
-  app/clients/{quran_foundation.py,equran.py,myquran.py,aladhan.py,hadith.py,mp3quran.py}
+  app/clients/{equran.py,myquran.py,aladhan.py,hadith.py}
   tests/
 /tools/build_quran_db/      # scripts that produce quran.sqlite + search index
 /tools/convert_model/       # HF -> CTranslate2 conversion script
@@ -99,7 +99,7 @@ docker compose -f infra/docker-compose.yml up --build
    Normalized text is used **only** inside the search index and is never displayed.
    Mushaf glyph strings are separate presentation data: preserve source glyphs, word order, and prescribed lines;
    never substitute them for canonical text in search, ASR, copy/share, or accessibility speech.
-2. **Never ship third-party secrets in the mobile app.** Quran Foundation `client_secret` and any API keys live only in
+2. **Never ship third-party secrets in the mobile app.** Any external-provider credentials live only in
    the backend (`.env`, secret manager). The app talks to our BFF.
 3. **Voice notes are ephemeral.** Do not persist raw audio on the server by default. Process in memory, delete after
    inference. Storing audio for model improvement requires explicit opt-in (see docs/10).
@@ -110,7 +110,7 @@ docker compose -f infra/docker-compose.yml up --build
 6. **Ayah identifiers** are always `surah:ayah` strings (e.g. `2:255`) or `(surah INT, ayah INT)`. Global ayah index
    (1..6236) is allowed internally. The target Mushaf edition is **Madinah 1405H / KFGQPC V1, 604 pages**.
    Resolve canonical ayat through that edition's local mapping; do not assume another edition's page boundaries match.
-7. **Arabic rendering:** RTL, without stripping diacritics. List mode uses the QUL Me Quran font.
+7. **Arabic rendering:** RTL, without stripping diacritics. The Surah reader uses QUL QPC V1 ayah glyphs with their matching page fonts (docs/07); canonical QUL text remains for semantic operations. Me Quran is used for semantic fallback/details.
    Mushaf mode must use the matching QPC V1 page fonts and fixed source lines (docs/11 and ADR-006), with
    zoom rather than reflow. Missing edition fonts are an asset error, not permission to substitute another font.
 8. Keep attribution screens up to date when adding any content source (docs/10 §4).
